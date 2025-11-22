@@ -1,0 +1,14 @@
+name: "Symbiote"
+description: "A proactive GitHub automation agent that responds to configured events and commands."
+outputs:
+  result:
+    description: "The result of the Symbiote execution."
+    value: ${{ steps.main.outputs.result }}
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Deno
+      uses: denoland/setup-deno@v2
+    - name: Run main script
+      shell: bash
+      run: deno run --unstable-sloppy-imports --allow-all --unstable-kv dist/index.js
