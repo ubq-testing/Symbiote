@@ -1,12 +1,27 @@
 import { Context as PluginContext } from "@ubiquity-os/plugin-sdk";
-import { Env } from "./env";
 import { PluginSettings } from "./plugin-input";
+import { WorkerEnv, WorkflowEnv } from "./env";
+
+export type SupportedEvents = "issue_comment.created" | "issues.opened" | "pull_request.opened";
+
+export type Command = {
+    action: "todo";
+}
 
 /**
- * Update `manifest.json` with any events you want to support like so:
- *
- * ubiquity:listeners: ["issue_comment.created", ...]
+ * The context in which the plugin is running.
  */
-export type SupportedEvents = "issue_comment.created" | "pull_request_review_comment.created";
+export type SymbioteRuntime = "action" | "worker";
 
-export type Context<T extends SupportedEvents = SupportedEvents> = PluginContext<PluginSettings, Env, null, T>;
+export type Context<
+    TEvents extends SupportedEvents = SupportedEvents,
+    TRuntime extends SymbioteRuntime = SymbioteRuntime
+> =
+    (TRuntime extends "worker" ? { request: Request } : {})
+    &
+    (TRuntime extends "worker" ? PluginContext<PluginSettings, WorkerEnv, Command, TEvents> :
+        TRuntime extends "action" ? PluginContext<PluginSettings, WorkflowEnv, Command, TEvents> :
+        never);
+
+
+
