@@ -13,8 +13,16 @@ export class SymbioteServer {
         private readonly _workflowId: string = "symbiote-server.yml"
     ) { }
 
+    /**
+     * - Check if the server is running
+     * - If the server is running, check if it has been running for too long
+     * - If the server has been running for too long, stop the server and spawn a new one
+     * - If the server is not running, spawn a new server
+     */
     async init() {
         await this.checkServerDetails();
+        let needsRestart = false;
+        let isRunning = false;
 
         // if the server is running, check if it has been running for too long
         if (this._currentRunData && this._currentRunData.status === "in_progress") {
@@ -22,16 +30,21 @@ export class SymbioteServer {
             const now = new Date();
             this._currentRuntimeHours = (now.getTime() - createdAt.getTime()) / 3600000;
             if (this._currentRuntimeHours >= this._maxRuntimeHours) {
-                await this.stopServer(this._context);
-                return await this.spawnServer(this._context);
+                needsRestart = true;
+                isRunning = true;
+            }else{
+                this._context.logger.info(`Symbiote server is running`, { currentRunData: this._currentRunData });
             }
         }
 
 
         // if the server is not running, set the status to stopped
         if (!this._currentRunData || this._currentRunData.status !== "in_progress") {
-            return await this.spawnServer(this._context);
+            needsRestart = true;
+            isRunning = false;
         }
+
+        return { needsRestart, isRunning, runData: this._currentRunData };
     }
 
     async restartServer(context: Context<"issue_comment.created", "worker">) {
