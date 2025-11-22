@@ -1,16 +1,15 @@
 import { StaticDecode, Type as T } from "@sinclair/typebox";
 
 /**
- * This should contain the properties of the bot config
- * that are required for the plugin to function.
- *
- * The kernel will extract those and pass them to the plugin,
- * which are built into the context object from setup().
+ * Plugin settings for Symbiote automation agent.
  */
 export const pluginSettingsSchema = T.Object(
   {
-    configurableResponse: T.String({ default: "Hello, world!" }),
-    customStringsUrl: T.Optional(T.String()),
+    executionBranch: T.String({
+      minLength: 1,
+      description: "The branch to use for the Symbiote workflow.",
+      default: "development" as const,
+    }),
   },
   { default: {} }
 );
