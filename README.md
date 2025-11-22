@@ -1,93 +1,160 @@
-# `@ubiquity-os/plugin-template`
+# Symbiote
 
-## Prerequisites
+A proactive GitHub automation agent that polls user events and acts on their behalf.
 
-- A good understanding of how the [kernel](https://github.com/ubiquity/ubiquibot-kernel) works and how to interact with it.
-- A basic understanding of the Ubiquibot configuration and how to define your plugin's settings.
+## Concept
+
+- Users fork the Symbiote repo and set a `GH_PAT` environment variable
+- Edge worker creates sessions and dispatches long-running GitHub Actions workflows
+- Main workflow polls GitHub's `user/events` API every 60 seconds for 6 hours
+- When events are detected, routing logic determines:
+  1. **Kernel-forwarded**: Events from repos with ubiquity app installed → kernel handles
+  2. **Safe actions**: Public repos → app authentication
+  3. **Unsafe actions**: Private repos → queued for main workflow with user auth
+- Worker handles session management and state-based communication
+- All data persisted to `__STORAGE__` branch
+
+## Event Routing
+
+- **Kernel-forwarded**: Events from repos with ubiquity app → kernel handles via existing infrastructure
+- **App authentication**: Public repos without ubiquity app → safe to use app permissions
+- **User authentication**: Private repos or sensitive actions → main workflow handles with user's PAT
+
+## POC Implementation
+
+This is a proof-of-concept implementation with the following features:
+
+- ✅ **Session Management**: Long-lived workflow sessions with automatic cleanup
+- ✅ **State-based Communication**: Kernel forwards requests via state_id routing
+- ✅ **Storage Layer**: Persistent data storage on `__STORAGE__` branch
+- ✅ **Event Routing**: Intelligent routing based on ubiquity app installation status
+- ✅ **Concurrent Workflows**: Multiple users can have active sessions simultaneously
+- ✅ **Secure Callbacks**: Workflow-to-worker communication with session validation
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 ## Getting Started
 
-1. Create a new repository using this template.
-2. Clone the repository to your local machine.
-3. Install the dependencies preferably using `bun`.
+1. Fork this repository
+2. Clone your fork locally
+3. Install dependencies: `bun install`
+4. Copy `.dev.vars.example` to `.dev.vars` and fill in your GitHub PAT
+5. Run locally: `bun run dev:bun`
 
-## Creating a new plugin
+## Configuration
 
-- If your plugin is to be used as a slash command which should have faster response times as opposed to longer running GitHub action tasks, you should use the `worker` type.
+Create a `.dev.vars` file with:
 
-1. Ensure you understand and have setup the [kernel](https://github.com/ubiquity/ubiquibot-kernel).
-2. Update [compute.yml](./.github/workflows/compute.yml) with your plugin's name and update the `id`.
-3. Update [context.ts](./src/types/context.ts) with the events that your plugin will fire on.
-4. Update [manifest.json](./manifest.json) with a proper description of your plugin.
-5. Update [plugin-input.ts](./src/types/plugin-input.ts) to match the `with:` settings in your org or repo level configuration.
-
-- Your plugin config should look similar to this:
-
-```yml
-plugins:
-  - name: hello-world
-    id: hello-world
-    uses:
-      - plugin: http://localhost:4000
-        with:
-          # Define configurable items here and the kernel will pass these to the plugin.
-          configurableResponse: "Hello, is it me you are looking for?"
-          customStringsUrl: "https://raw.githubusercontent.com/ubiquibot/plugin-template/development/strings.json"
+```bash
+GH_PAT="your_github_personal_access_token_here"
+LOG_LEVEL="INFO"
 ```
 
-###### At this stage, your plugin will fire on your defined events with the required settings passed in from the kernel. You can now start writing your plugin's logic.
+The `GH_PAT` should have these permissions:
+- `read:user` - to read user profile information
+- `read:org` - to read org membership (if applicable)
+- `repo` - full access to private repositories
+- `public_repo` - access to public repositories
 
-6. Start building your plugin by adding your logic to the [plugin.ts](./src/index.ts) file.
+## Usage
 
-## Testing a plugin
+### Local Development
 
-### Worker Plugins
+```bash
+# Start the HTTP server
+bun run dev:bun
 
-- `bun worker` - to run the worker locally.
-- To trigger the worker, `POST` requests to http://localhost:4000/ with an event payload similar to:
+# Check health
+curl http://localhost:4000/health
 
-```ts
-await fetch("http://localhost:4000/", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    stateId: "",
-    eventName: "",
-    eventPayload: "",
-    settings: "",
-    ref: "",
-    authToken: "",
-  }),
-});
+# Manually start polling for a user
+curl -X POST http://localhost:4000/start/your-github-username
 ```
 
-A full example can be found [here](https://github.com/ubiquibot/assistive-pricing/blob/623ea3f950f04842f2d003bda3fc7b7684e41378/tests/http/request.http).
+### Testing Event Processing
 
-#### Deploying the Worker
+The server will automatically poll for events every 60 seconds when started. To test:
 
-For testing purposes, the worker can be deployed through the Worker Deploy and Worker Delete workflows. It requires to
-create a personal [Cloudflare Account](https://www.cloudflare.com/), and fill the `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` within your
-GitHub Action Secrets.
+1. Create activity on GitHub (comment on an issue, create a PR, push code, etc.)
+2. Wait for the next polling cycle
+3. Check the server logs for event processing
+4. Look for acknowledgment comments on the relevant issues/PRs
 
-### Action Plugins
+### GitHub Actions Integration
 
-- Ensure the kernel is running and listening for events.
-- Fire an event in/to the repo where the kernel is installed. This can be done in a number of ways, the easiest being via the GitHub UI or using the GitHub API, such as posting a comment, opening an issue, etc in the org/repo where the kernel is installed.
-- The kernel will process the event and dispatch it using the settings defined in your `.ubiquibot-config.yml`.
-- The `compute.yml` workflow will run and execute your plugin's logic.
-- You can view the logs in the Actions tab of your repo.
+For private repositories or actions requiring user authentication:
 
-[Nektos Act](https://github.com/nektos/act) - a tool for running GitHub Actions locally.
+1. The system automatically dispatches the `symbiote-auth.yml` workflow
+2. The workflow runs with your repository's permissions
+3. Results are sent back to the callback URL
 
-## More information
+## API Endpoints
 
-- [Full Ubiquibot Configuration](https://github.com/ubiquity/ubiquibot/blob/0fde7551585499b1e0618ec8ea5e826f11271c9c/src/types/configuration-types.ts#L62) - helpful for defining your plugin's settings as they are strongly typed and will be validated by the kernel.
-- [Ubiquibot V1](https://github.com/ubiquity/ubiquibot) - helpful for porting V1 functionality to V2, helper/utility functions, types, etc. Everything is based on the V1 codebase but with a more modular approach. When using V1 code, keep in mind that most all code will need refactored to work with the new V2 architecture.
+- `GET /health` - Health check
+- `POST /session/callback` - Workflow session registration
+- `POST /state/:stateId` - State-based requests from kernel
+- `POST /start/:userId` - Manually start polling for a user
+- `GET /session/:userId/status` - Check session status
+- `GET /storage/events/:userId` - Retrieve processed events
+- `POST /registry/refresh` - Refresh org/repo registry
 
-## Examples
+## Architecture
 
-- [Start/Stop Slash Command](https://github.com/ubq-testing/start-stop-module) - simple
-- [Assistive Pricing Plugin](https://github.com/ubiquibot/assistive-pricing) - complex
-- [Conversation Rewards](https://github.com/ubiquibot/conversation-rewards) - really complex
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   GitHub User   │────│   Edge Worker    │────│   GitHub API    │
+│   Activity      │    │   (Session Mgmt) │    │   (Events)      │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                              │                        │
+                              │                        ▼
+                              │               ┌──────────────────┐
+                              │               │  Main Workflow   │
+                              │               │  (6hr polling)   │
+                              │               └──────────────────┘
+                              ▼                        │
+                       ┌──────────────────┐          │
+                       │  Safety Check    │          │
+                       │  & Routing       │          │
+                       └──────────────────┘          │
+                              │                      │
+                    ┌─────────┼─────────┐          │
+                    │         │         │          │
+           ┌────────▼──┐ ┌────▼───┐ ┌──▼────────┐   │
+           │App Auth   │ │Kernel  │ │User Auth  │   │
+           │(Public)   │ │Forward │ │(Workflow) │   │
+           └───────────┘ └────────┘ └───────────┘   │
+                                                   │
+                    All user-auth actions handled ──┘
+                         by main workflow
+```
+
+## Deployment
+
+Deploy to Cloudflare Workers:
+
+```bash
+# Set your Cloudflare credentials
+wrangler auth login
+
+# Deploy
+wrangler deploy
+```
+
+Update the `getWorkerUrl()` function in `symbiote.ts` with your deployed worker URL.
