@@ -5,6 +5,8 @@ import { isActionRuntimeCtx, isEdgeRuntimeCtx } from "./types/typeguards";
 import { CallbackResult, HandlerCallbacks } from "./types/callbacks";
 import { actionCallbacks } from "./handlers/action-callbacks";
 import { handleCommand } from "./handlers/commands/command-handler";
+import { customEventSchemas } from "./types/custom-event-schemas";
+import { eventNames } from "process";
 
 /**
  * The main plugin function. Split for easier testing.
@@ -58,13 +60,16 @@ export async function runSymbiote<
   return { status: 200, reason: "Success" };
 }
 
-async function handleCallbacks<T extends SupportedEvents = SupportedEvents, TRuntime extends SymbioteRuntime = SymbioteRuntime>(
+async function handleCallbacks<
+T extends SupportedEvents = SupportedEvents, 
+TRuntime extends SymbioteRuntime = SymbioteRuntime
+>(
   context: Context<T, TRuntime>,
   callbacks: HandlerCallbacks<T, TRuntime>
 ) {
   const { logger, eventName } = context;
 
-  const eventCallbacks = callbacks[eventName];
+  const eventCallbacks = callbacks[eventName as keyof typeof callbacks];
   if (!eventCallbacks || !eventCallbacks?.length) {
     logger.error(`No callbacks found for event: ${eventName}`);
     return { status: 404, reason: "No callbacks found" };
