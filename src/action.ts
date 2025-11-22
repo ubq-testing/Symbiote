@@ -1,18 +1,18 @@
 import { createActionsPlugin } from "@ubiquity-os/plugin-sdk";
 import { LOG_LEVEL, LogLevel } from "@ubiquity-os/ubiquity-os-logger";
-import { runPlugin } from "./index";
-import { Env, envSchema, PluginSettings, pluginSettingsSchema, SupportedEvents } from "./types";
+import { runSymbiote } from "./index";
+import { pluginSettingsSchema, PluginSettings, SupportedEvents, Command } from "./types";
+import { WorkflowEnv, workflowEnvSchema } from "./types/env";
 
-export default createActionsPlugin<PluginSettings, Env, null, SupportedEvents>(
-  (context) => {
-    return runPlugin(context);
-  },
-  {
-    logLevel: (process.env.LOG_LEVEL as LogLevel) || LOG_LEVEL.INFO,
-    settingsSchema: pluginSettingsSchema,
-    envSchema: envSchema,
-    ...(process.env.KERNEL_PUBLIC_KEY && { kernelPublicKey: process.env.KERNEL_PUBLIC_KEY }),
-    postCommentOnError: true,
-    bypassSignatureVerification: process.env.NODE_ENV === "local",
-  }
-);
+createActionsPlugin<PluginSettings, WorkflowEnv, Command, SupportedEvents>(
+    (context) => {
+        return runSymbiote<SupportedEvents, "action">(context);
+    },
+    {
+        envSchema: workflowEnvSchema,
+        postCommentOnError: true,
+        settingsSchema: pluginSettingsSchema,
+        logLevel: (process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO,
+        kernelPublicKey: process.env.KERNEL_PUBLIC_KEY as string,
+        bypassSignatureVerification: true
+    }).catch(console.error);
