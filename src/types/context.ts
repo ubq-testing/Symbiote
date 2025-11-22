@@ -5,7 +5,7 @@ import { WorkerEnv, WorkflowEnv } from "./env";
 export type SupportedEvents = "issue_comment.created" | "issues.opened" | "pull_request.opened";
 
 export type Command = {
-    action: "todo";
+    action: "server.spawn" | "server.restart" | "server.stop";
 }
 
 /**

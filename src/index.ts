@@ -4,6 +4,7 @@ import { workerCallbacks } from "./handlers/worker-callbacks";
 import { isActionRuntimeCtx, isEdgeRuntimeCtx } from "./types/typeguards";
 import { CallbackResult, HandlerCallbacks } from "./types/callbacks";
 import { actionCallbacks } from "./handlers/action-callbacks";
+import { handleCommand } from "./handlers/commands/command-handler";
 
 /**
  * The main plugin function. Split for easier testing.
@@ -19,7 +20,7 @@ export async function runSymbiote<
   if (isEdgeRuntimeCtx<T>(context, runtime)) {
 
     if (command) {
-      return await handleCommand(context);
+      return await handleCommand(context as Context<"issue_comment.created", "worker">);
     }
 
     const results = await handleCallbacks(context, workerCallbacks);
@@ -70,18 +71,4 @@ async function handleCallbacks<T extends SupportedEvents = SupportedEvents, TRun
   }
 
   return await Promise.all(eventCallbacks.map((callback) => callback(context)));
-}
-
-async function handleCommand<T extends SupportedEvents = SupportedEvents>(context: Context<T, "worker">) {
-  const { command, logger, octokit } = context;
-
-  if (!command) return;
-
-  switch (command.action) {
-    case "todo":
-      logger.info("Handling command: todo");
-      break;
-    default:
-      logger.error(`Unknown command action: ${command.action}`);
-  }
 }
