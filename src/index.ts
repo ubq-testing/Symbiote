@@ -40,7 +40,6 @@ export async function runSymbiote<
     callbackResults = results;
   }
 
-
   if (!callbackResults.length) {
     logger.error(`No callbacks found for event: ${eventName}`);
     return { status: 404, reason: "No callbacks found" };

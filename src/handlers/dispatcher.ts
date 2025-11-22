@@ -3,8 +3,8 @@ import { PluginInputs } from "../types/callbacks";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { CallbackResult } from "../types/callbacks";
 
-export async function dispatcher(context: Context<SupportedEvents, "worker">): Promise<CallbackResult> {
-  const result = await workflowDispatch(context);
+export async function dispatcher(context: Context<SupportedEvents, "worker">, workflowId = "compute.yml"): Promise<CallbackResult> {
+  const result = await workflowDispatch(context, workflowId);
   if (result.status !== 204) {
     return { status: result.status, reason: JSON.stringify(result.data) };
   }
@@ -17,7 +17,7 @@ export async function dispatcher(context: Context<SupportedEvents, "worker">): P
  * confirmed yet. Might remove this in the future and prefer main workflow 
  * calls instead.
  */
-async function workflowDispatch<T extends SupportedEvents = SupportedEvents>(context: Context<T, "worker">) {
+async function workflowDispatch<T extends SupportedEvents = SupportedEvents>(context: Context<T, "worker">, workflowId: string) {
     const payload = (await context.request.json()) as PluginInputs; // required cast
 
     const octokit = new customOctokit({
@@ -28,7 +28,7 @@ async function workflowDispatch<T extends SupportedEvents = SupportedEvents>(con
   return await octokit.rest.actions.createWorkflowDispatch({
     owner: context.env.SYMBIOTE_HOST.USERNAME,  
     repo: context.env.SYMBIOTE_HOST.FORKED_REPO.owner,
-    workflow_id: "compute.yml",
+    workflow_id: workflowId,
     ref: context.config.executionBranch,
     inputs: {
       ...payload,
