@@ -31,10 +31,12 @@ jobs:
         curl -X POST "${{ inputs.callback_url }}" \
           -H "Content-Type: application/json" \
           -d '{
-            "sessionId": "${{ inputs.session_id }}",
-            "workflowRunId": "${{ github.run_id }}",
-            "origin": "${{ github.repository }}",
-            "status": "ready"
+            "action": "server.register",
+            "client_payload": {
+              "sessionId": "${{ inputs.session_id }}",
+              "workflowRunId": "${{ github.run_id }}",
+              "repository": "${{ github.repository }}"
+            }
           }'
 
     - name: Checkout repository
