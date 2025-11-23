@@ -1,7 +1,6 @@
 import { Value } from "@sinclair/typebox/value";
 import { workerEnvSchema, workflowEnvSchema } from "../types/env";
 import { SymbioteRuntime } from "../types";
-import { env as honoEnv } from "hono/adapter";
 import { StaticDecode } from "@sinclair/typebox";
 
 export function validateEnvironment(env: Record<string, string>, runtime: SymbioteRuntime) {
@@ -12,16 +11,9 @@ export function validateEnvironment(env: Record<string, string>, runtime: Symbio
   }catch(error: unknown) {
     if(error instanceof Error) {
       console.error("Error cleaning environment:", error.message);
-      console.log("data", {
-        env,
-        schema,
-      })
       throw new Error(`Invalid environment variables: ${error.message}`);
     }
-    console.error("Error cleaning environment:", error);
   }
-  console.log("Full environment:", env);
-  console.log("Cleaned environment:", cleanedEnv);
 
   if (!Value.Check(schema, cleanedEnv)) {
     const errors = [...Value.Errors(schema, cleanedEnv)];
