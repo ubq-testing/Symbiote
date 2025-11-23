@@ -80460,10 +80460,10 @@ function isCommentEvent(context) {
     return context.eventName === "issue_comment.created";
 }
 function isEdgeRuntimeCtx(context, runtime) {
-    return runtime === "deno" || runtime === "workerd";
+    return runtime === "worker";
 }
 function isActionRuntimeCtx(context, runtime) {
-    return runtime === "node" || runtime === "bun";
+    return runtime === "action";
 }
 
 ;// CONCATENATED MODULE: ./src/handlers/action-callbacks.ts
@@ -80640,19 +80640,12 @@ async function handleCommand(context) {
 
 
 
-
 /**
  * The main plugin function. Split for easier testing.
  */
-async function runSymbiote(context) {
+async function runSymbiote(context, runtime) {
     const { logger, command = null } = context;
-    const runtime = getRuntimeKey();
     let callbackResults = [];
-    console.log("Confirming runtime", {
-        runtime,
-        isEdgeRuntimeCtx: isEdgeRuntimeCtx(context, runtime),
-        isActionRuntimeCtx: isActionRuntimeCtx(context, runtime),
-    });
     if (isEdgeRuntimeCtx(context, runtime)) {
         if (command) {
             return await handleCommand(context);
@@ -80998,7 +80991,7 @@ async function runAction() {
     process.env = validatedEnv;
     try {
         return await createActionsPlugin((context) => {
-            return runSymbiote(context);
+            return runSymbiote(context, "action");
         }, {
             envSchema: workflowEnvSchema,
             postCommentOnError: true,
