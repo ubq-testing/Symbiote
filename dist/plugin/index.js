@@ -80961,6 +80961,10 @@ function validateEnvironment(env, runtime) {
     catch (error) {
         if (error instanceof Error) {
             console.error("Error cleaning environment:", error.message);
+            console.log("data", {
+                env,
+                schema,
+            });
             throw new Error(`Invalid environment variables: ${error.message}`);
         }
         console.error("Error cleaning environment:", error);
