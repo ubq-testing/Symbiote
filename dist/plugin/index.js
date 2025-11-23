@@ -80648,6 +80648,11 @@ async function runSymbiote(context) {
     const { logger, command = null } = context;
     const runtime = getRuntimeKey();
     let callbackResults = [];
+    console.log("Confirming runtime", {
+        runtime,
+        isEdgeRuntimeCtx: isEdgeRuntimeCtx(context, runtime),
+        isActionRuntimeCtx: isActionRuntimeCtx(context, runtime),
+    });
     if (isEdgeRuntimeCtx(context, runtime)) {
         if (command) {
             return await handleCommand(context);
