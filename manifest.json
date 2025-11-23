@@ -19,5 +19,6 @@
         "type": "string"
       }
     }
-  }
+  },
+  "homepage_url": "https://og-symbiote.deno.dev"
 }
