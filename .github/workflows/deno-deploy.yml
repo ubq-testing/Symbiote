@@ -28,6 +28,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+          WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
+          NODE_ENV: ${{ secrets.NODE_ENV }}
+          SYMBIOTE_HOST: ${{ secrets.SYMBIOTE_HOST }}
         with:
           token: ${{ secrets.DENO_DEPLOY_TOKEN }}
           action: ${{ github.event_name == 'delete' && 'delete' || 'deploy' }}
