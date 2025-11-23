@@ -68,8 +68,8 @@ export default {
             env: validatedEnv,
             request: clonedRequest,
             pluginInputs: (await clonedRequest.json()) as PluginInputs,
+            runtime: "worker",
           },
-          "worker"
         );
       },
       manifest as Manifest,
@@ -107,13 +107,17 @@ export default {
         try {
           const validatedPayload = validateCallbackPayload({ payload: body, logger, event });
 
-          async function fetchMergedConfig(): Promise<PluginSettings> {
+          /**
+           * Gets default plugin settings.
+           * TODO: Implement proper config fetching/merging from plugin settings if needed.
+           */
+          async function getDefaultConfig(): Promise<PluginSettings> {
             return {
               executionBranch: "development",
             } as PluginSettings;
           }
 
-          const config = await fetchMergedConfig();
+          const config = await getDefaultConfig();
 
           // Route to appropriate handler via runSymbiote
           const results = await runSymbiote(
@@ -139,8 +143,8 @@ export default {
                 authToken: validatedPayload.client_payload.authToken,
                 signature: validatedPayload.client_payload.signature,
               },
+              runtime: "worker",
             } as Context<typeof event, "worker">,
-            "worker"
           );
 
           

@@ -3,6 +3,10 @@ import { CallbackResult } from "../../../types/callbacks";
 import { createRuntimeTracker } from "../../../utils/runtime-tracker";
 import { runServerActionLoop } from "./shared";
 
+
+const MAX_POLL_ATTEMPTS = 3;
+const POLL_INTERVAL_MS = 1000;
+
 /**
  * Handles server.restart event in action context
  * Checks if previous workflow run is still running and cancels it if needed
@@ -10,7 +14,7 @@ import { runServerActionLoop } from "./shared";
 export async function handleServerRestartAction(
     context: Context<"server.restart", "action">
   ): Promise<CallbackResult> {
-    const { logger, payload, octokit, env } = context;
+    const { logger, payload, octokit, env, config } = context;
     const { sessionId, workflowId } = payload.client_payload;
   
     logger.info(`Handling server restart in action context`, { sessionId, workflowId });
@@ -33,9 +37,36 @@ export async function handleServerRestartAction(
           repo,
           run_id: workflowId,
         });
-  
-        // Wait a bit for cancellation to take effect
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        // Poll until workflow is actually cancelled
+        let cancelled = false;
+
+        for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt++) {
+          await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+          
+          try {
+            const statusResponse = await octokit.rest.actions.getWorkflowRun({
+              owner,
+              repo,
+              run_id: workflowId,
+            });
+
+            if (statusResponse.data.status !== "in_progress" && statusResponse.data.status !== "queued") {
+              cancelled = true;
+              logger.info(`Previous workflow run cancelled successfully`, { workflowId, finalStatus: statusResponse.data.status });
+              break;
+            }
+          } catch (statusError) {
+            // If we can't fetch status, assume it's cancelled (might have been deleted)
+            logger.info(`Could not fetch workflow status, assuming cancelled`, { workflowId, err: statusError instanceof Error ? statusError.message : String(statusError) });
+            cancelled = true;
+            break;
+          }
+        }
+
+        if (!cancelled) {
+          logger.warn(`Workflow ${workflowId} may still be running after cancellation attempt`, { workflowId, maxAttempts: MAX_POLL_ATTEMPTS });
+        }
       }
     } catch (error) {
       // If run doesn't exist or is already cancelled, that's fine
@@ -48,7 +79,7 @@ export async function handleServerRestartAction(
       throw new Error("GITHUB_RUN_ID not found in environment");
     }
   
-    const runtimeTracker = createRuntimeTracker(env, octokit);
+    const runtimeTracker = createRuntimeTracker(env, octokit, config);
     await runServerActionLoop(context, runtimeTracker, sessionId, runId);
   
     return { status: 200, reason: "Server restarted" };

@@ -1,9 +1,11 @@
 import { Context } from "../../../types/index";
 import { createRuntimeTracker } from "../../../utils/runtime-tracker";
+import { pollUserEvents, processEvent } from "./event-poller";
+import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 
-const CHECK_INTERVAL_MS = 60 * 60 * 1000; // Check every 60 minutes
-const RESTART_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
-const MAX_RETRIES = 3;
+// Time conversion constants
+const MINUTES_TO_MS = 60 * 1000;
+const SECONDS_TO_MS = 1000;
 
 /**
  * Main server loop that runs indefinitely until stopped or restarted
@@ -14,13 +16,23 @@ export async function runServerActionLoop(
   sessionId: string,
   workflowRunId: number
 ): Promise<void> {
-  const { logger, env, octokit } = context;
+  const { logger, env, octokit, config } = context;
   let shouldStop = false;
   let stopSignalReceived = false;
 
   logger.info(`Server loop started`, { sessionId, workflowRunId });
 
   const { owner, repo } = env.SYMBIOTE_HOST.FORKED_REPO;
+  const username = env.SYMBIOTE_HOST.USERNAME;
+
+  const runtimeCheckIntervalMs = (config.runtimeCheckIntervalMinutes ?? 60) * MINUTES_TO_MS;
+  const pollIntervalMs = (config.pollIntervalSeconds ?? 60) * SECONDS_TO_MS;
+  const eventsPerPage = config.eventsPerPage ?? 30;
+
+  // Create octokit instance with user PAT for polling user events
+  const userOctokit = new customOctokit({
+    auth: env.SYMBIOTE_HOST_PAT,
+  });
 
   // Set up periodic runtime check
   const runtimeCheckInterval = setInterval(async () => {
@@ -35,13 +47,46 @@ export async function runServerActionLoop(
     } catch (error) {
       logger.error(`Error checking runtime: ${error}`);
     }
-  }, CHECK_INTERVAL_MS);
+  }, runtimeCheckIntervalMs);
 
-  // Main server loop - keep running until stopped
+  // Track last event ID to avoid processing duplicates
+  let lastProcessedEventId: string | null = null;
+
+  // Main server loop - poll for events at configured interval
   while (!shouldStop && !stopSignalReceived) {
-    // The server is running - we just need to keep the process alive
-    // In a real implementation, this would be where your actual server logic runs
-    await new Promise((resolve) => setTimeout(resolve, 60 * 60 * 1000)); // Check every 60 minutes
+    try {
+      logger.info(`Polling for user events: ${username}`);
+      
+      // Poll for user events
+      const events = await pollUserEvents(userOctokit, username, eventsPerPage);
+
+      if (events.length > 0) {
+        logger.info(`Found ${events.length} events, processing...`);
+
+        // Process events (filter out already processed ones)
+        for (const event of events) {
+          // Skip if we've already processed this event
+          if (lastProcessedEventId && event.id === lastProcessedEventId) {
+            continue;
+          }
+
+          await processEvent(context, event);
+
+          // Update last processed event ID
+          if (!lastProcessedEventId || event.id > lastProcessedEventId) {
+            lastProcessedEventId = event.id;
+          }
+        }
+      } else {
+        logger.debug(`No new events found`);
+      }
+    } catch (error) {
+      logger.error(`Error in event polling loop: ${error}`);
+      // Continue polling even if there's an error
+    }
+
+    // Wait for polling interval before next poll
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
   }
 
   clearInterval(runtimeCheckInterval);
@@ -56,8 +101,12 @@ async function initiateRestart(
   sessionId: string,
   workflowRunId: number
 ): Promise<void> {
-  const { logger, env } = context;
+  const { logger, env, config } = context;
   const { WORKER_URL, WORKER_SECRET } = env;
+
+  const maxRetries = 3;
+  const retryDelayMs = 10 * SECONDS_TO_MS;
+  const restartTimeoutMs = 3 * MINUTES_TO_MS;
 
   logger.info(`Initiating restart, sending callback to worker`, {
     sessionId,
@@ -74,9 +123,9 @@ async function initiateRestart(
   // Try to get authToken and ref from the original payload if available
   const originalPayload = context.payload.client_payload;
   const authToken = originalPayload?.authToken || "";
-  const ref = originalPayload?.ref || context.config.executionBranch || "main";
+  const ref = originalPayload?.ref || config.executionBranch || "main";
 
-  while (retries < MAX_RETRIES && !confirmed) {
+  while (retries < maxRetries && !confirmed) {
     try {
       const response = await Promise.race([
         fetch(`${WORKER_URL}/callback`, {
@@ -100,7 +149,7 @@ async function initiateRestart(
           }),
         }),
         new Promise<Response>((_, reject) =>
-          setTimeout(() => reject(new Error("Timeout")), RESTART_TIMEOUT_MS)
+          setTimeout(() => reject(new Error("Timeout")), restartTimeoutMs)
         ),
       ]);
 
@@ -114,21 +163,21 @@ async function initiateRestart(
       }
 
       retries++;
-      if (retries < MAX_RETRIES) {
-        logger.warn(`Restart callback failed, retrying (${retries}/${MAX_RETRIES})`);
-        await new Promise((resolve) => setTimeout(resolve, 10000)); // Wait 10 seconds before retry
+      if (retries < maxRetries) {
+        logger.warn(`Restart callback failed, retrying (${retries}/${maxRetries})`);
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
       }
     } catch (error) {
       retries++;
       logger.error(`Error sending restart callback: ${error}`);
-      if (retries < MAX_RETRIES) {
-        await new Promise((resolve) => setTimeout(resolve, 10000));
+      if (retries < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
       }
     }
   }
 
   if (!confirmed) {
-    logger.error(`Failed to confirm restart callback after ${MAX_RETRIES} retries, terminating anyway`);
+    logger.error(`Failed to confirm restart callback after ${maxRetries} retries, terminating anyway`);
   }
 
   // Exit the process

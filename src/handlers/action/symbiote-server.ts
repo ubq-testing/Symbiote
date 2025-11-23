@@ -1,25 +1,41 @@
 import { RestEndpointMethodTypes } from "@ubiquity-os/plugin-sdk/octokit";
-import { Context } from "../../types/index";
+import { Context, SupportedCustomEvents, SupportedEvents, SymbioteRuntime } from "../../types/index";
 import { dispatcher } from "../dispatcher";
 import { CallbackResult } from "../../types/callbacks";
+import { customEventSchemas } from "../../types/custom-event-schemas";
+import { isActionRuntimeCtx } from "../../types/typeguards";
+
+const MS_PER_HOUR = 60 * 60 * 1000;
+
+function isCustomEvent(context: Context<SupportedEvents, SymbioteRuntime>): context is Context<SupportedCustomEvents, SymbioteRuntime> {
+  return context.eventName in customEventSchemas;
+}
 
 export class SymbioteServer {
   private _serverStatus: "running" | "stopped" | "error" | null = null;
-  private _maxRuntimeHours = 6 - 1; // 1 hour safety buffer
+  private _maxRuntimeHours: number;
   private _currentRuntimeHours = 0;
   private _currentRunData: RestEndpointMethodTypes["actions"]["listWorkflowRuns"]["response"]["data"]["workflow_runs"][0] | null = null;
   private _sessionId: string | null = null;
+  private _context: Context<SupportedEvents, "action">;
   /**
    * Not the file name of the action used when dispatch,
    * but the workflow ID of the workflow run that is currently running.
-   * 
+   *
    * E.G., octokit.rest.actions.listWorkflowRuns().data.workflow_runs[0].id,
    * which is the workflow ID of the workflow run that is currently running.
    */
   private _workflowId: number | null = null;
 
-  constructor(private readonly _context: Context<"issue_comment.created" | "server.start" | "server.stop" | "server.restart", "worker">) {
-    this._sessionId = _context.pluginInputs.stateId;
+  constructor(context: Context<SupportedEvents, SymbioteRuntime>) {
+    if (!isCustomEvent(context) || !isActionRuntimeCtx(context)) {
+      throw new Error("Context must be a custom event and an action context");
+    }
+    this._context = context;
+    this._sessionId = context.payload.client_payload.stateId;
+    const maxRuntimeHours = context.config.maxRuntimeHours ?? 6;
+    const safetyBufferHours = 1;
+    this._maxRuntimeHours = maxRuntimeHours - safetyBufferHours;
   }
 
   get serverStatus() {
@@ -62,7 +78,7 @@ export class SymbioteServer {
       this._workflowId = this._currentRunData.id;
       const createdAt = new Date(this._currentRunData.created_at);
       const now = new Date();
-      this._currentRuntimeHours = (now.getTime() - createdAt.getTime()) / 3600000;
+      this._currentRuntimeHours = (now.getTime() - createdAt.getTime()) / MS_PER_HOUR;
       if (this._currentRuntimeHours >= this._maxRuntimeHours) {
         needsRestart = true;
         isRunning = true;
@@ -80,54 +96,50 @@ export class SymbioteServer {
     return { needsRestart, isRunning, runData: this._currentRunData };
   }
 
-  async restartServer(context: Context<"issue_comment.created", "worker">) {
-    const { logger } = context;
+  async restartServer() {
+    const { logger } = this._context;
     logger.info(`Restarting Symbiote server`);
-    await this.stopServer(context);
-    return await this.spawnServer(context);
+    await this.stopServer();
+    return await this.spawnServer();
   }
 
-  async spawnServer(context: Context<"issue_comment.created", "worker">) {
+  async spawnServer() {
     if (this._serverStatus !== "stopped") {
       throw new Error("Server is already running");
     }
     if (!this._sessionId) {
       throw new Error("Session ID not found");
     }
-    const { logger } = context;
+    const { logger } = this._context;
     logger.info(`Spawning Symbiote server`);
     return await dispatcher({
-      ...context,
+      ...this._context,
       eventName: "server.start",
       payload: {
         action: "server.start",
         client_payload: {
+          ...(this._context as Context<SupportedCustomEvents, "action">).payload.client_payload,
           sessionId: this._sessionId,
-          authToken: this._context.pluginInputs.authToken,
-          ref: this._context.pluginInputs.ref,
-          command: this._context.pluginInputs.command,
-          signature: this._context.pluginInputs.signature,
-          stateId: this._context.pluginInputs.stateId,
           workflowId: this._currentRunData?.id ?? this._workflowId ?? 0,
         },
       },
     });
   }
 
-  async stopServer(context: Context<"issue_comment.created", "worker">): Promise<CallbackResult> {
-    const { logger, octokit, env } = context;
+  async stopServer(): Promise<CallbackResult> {
+    const { logger, octokit, env } = this._context;
     logger.info(`Stopping Symbiote server`);
 
     if (!this._currentRunData?.id) {
       return { status: 500, reason: "Cannot stop Symbiote server: No run data found" };
     }
 
-    const response = await octokit.rest.actions.cancelWorkflowRun({
+    const response = (await octokit.rest.actions.cancelWorkflowRun({
       owner: env.SYMBIOTE_HOST.FORKED_REPO.owner,
       repo: env.SYMBIOTE_HOST.FORKED_REPO.repo,
       workflow_id: "compute.yml",
       run_id: this._currentRunData.id,
-    }) as RestEndpointMethodTypes["actions"]["cancelWorkflowRun"]["response"];
+    })) as RestEndpointMethodTypes["actions"]["cancelWorkflowRun"]["response"];
 
     if (response.status === 202) {
       return { status: 200, reason: "Symbiote server stopped" };

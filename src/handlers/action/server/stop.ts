@@ -31,12 +31,14 @@ export async function handleServerStopAction(
     if (result.status === 200) {
       process.exit(0);
     } else {
-      logger.error(`Error handling stop prerequisites: ${result.reason}`);
+      const errorMessage = `Error handling stop prerequisites: ${result.reason}`;
+      logger.error(errorMessage);
 
       /**
-       * I need to consider this more on how best to handle this scenario.
+       * If stop prerequisites fail, we should still attempt to exit gracefully.
+       * However, we log the error first so it's visible in the workflow logs.
        */
-      throw logger.error(`Error handling stop prerequisites: ${result.reason}`);
+      throw new Error(errorMessage);
     }
   }
   

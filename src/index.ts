@@ -10,12 +10,12 @@ import { actionCallbacks } from "./handlers/action-callbacks";
 export async function runSymbiote<
   T extends SupportedEvents = SupportedEvents,
   TRuntime extends SymbioteRuntime = SymbioteRuntime
->(context: Context<T, TRuntime>, runtime: TRuntime) {
+>(context: Context<T, TRuntime>) {
   const { logger } = context;
   let callbackResults: CallbackResult[] = [];
 
-  if (isEdgeRuntimeCtx<T>(context, runtime)) {
-    const results = await handleCallbacks(context, workerCallbacks);
+  if (isEdgeRuntimeCtx<T>(context)) {
+    const results = await handleCallbacks<T, "worker">(context, workerCallbacks);
 
     if ("status" in results) {
       throw logger.error(`Fatal error in callbacks: ${results.reason}`);
@@ -23,9 +23,8 @@ export async function runSymbiote<
 
     callbackResults = results;
 
-  } else if (isActionRuntimeCtx<T>(context, runtime)) {
-    console.log("Confirming action runtime");
-    const results = await handleCallbacks(context, actionCallbacks);
+  } else if (isActionRuntimeCtx<T>(context)) {
+    const results = await handleCallbacks<T, "action">(context, actionCallbacks);
 
     if ("status" in results) {
       throw logger.error(`Fatal error in callbacks: ${results.reason}`);
@@ -33,21 +32,17 @@ export async function runSymbiote<
 
     callbackResults = results;
   } else {
-    throw logger.error(`Unsupported runtime: ${runtime}. Only worker and action runtimes are supported.`);
+    throw logger.error(`Unsupported runtime: ${context.runtime}. Only worker and action runtimes are supported.`);
   }
 
-  if (callbackResults.length) {
-    for (const callback of callbackResults) {
-      if (callback.status !== 200) {
-        logger.error(`Error in callback: ${callback.reason}`);
-        return { status: callback.status, reason: callback.reason };
-      } else {
-        logger.ok(`Callback successful: ${callback.reason}`);
-      }
-    }
+  const errorMessages = callbackResults.map((callback) => callback.status !== 200 ? callback.reason : null).filter((message) => message !== null);
+  const errorMessage = errorMessages.join(", ");
+  
+  if (errorMessages.length > 0) {
+    return { status: 500, reason: errorMessage, content: JSON.stringify(callbackResults) };
   }
 
-  return { status: 200, reason: "Success" };
+  return { status: 200, reason: "Success", content: JSON.stringify(callbackResults) };
 }
 
 async function handleCallbacks<

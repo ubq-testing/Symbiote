@@ -1,16 +1,22 @@
-import { Context, SupportedEvents } from "../types/index";
-import { PluginInputs } from "../types/callbacks";
+import { Context, SupportedEvents, SymbioteRuntime } from "../types/index";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { CallbackResult } from "../types/callbacks";
-import { brotliCompressSync } from "node:zlib";
+import { isActionRuntimeCtx, isEdgeRuntimeCtx } from "../types/typeguards";
 
-function compressString(str: string): string {
-  const input = Buffer.from(str, "utf8");
-  const compressed = brotliCompressSync(input);
-  return Buffer.from(compressed).toString("base64");
+/**
+ * Encodes a string to base64 for transmission in workflow inputs.
+ */
+function encodeString(str: string): string {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(str);
+  let binary = "";
+  for (let i = 0; i < data.length; i++) {
+    binary += String.fromCharCode(data[i]);
+  }
+  return btoa(binary);
 }
 
-export async function dispatcher(context: Context<SupportedEvents, "worker">, workflowId = "compute.yml"): Promise<CallbackResult> {
+export async function dispatcher(context: Context<SupportedEvents, SymbioteRuntime>, workflowId = "compute.yml"): Promise<CallbackResult> {
   const result = await workflowDispatch(context, workflowId);
   if (result.status !== 204) {
     return { status: result.status, reason: JSON.stringify(result.data) };
@@ -18,36 +24,44 @@ export async function dispatcher(context: Context<SupportedEvents, "worker">, wo
   return { status: 200, reason: "Workflow dispatched" };
 }
 
-
-/**
- * This is intended for smaller main workflow-detached jobs. Use-case not fully 
- * confirmed yet. Might remove this in the future and prefer main workflow 
- * calls instead.
- */
-async function workflowDispatch<T extends SupportedEvents = SupportedEvents>(context: Context<T, "worker">, workflowId: string) {
+async function workflowDispatch<T extends SupportedEvents = SupportedEvents>(
+  context: Context<T, SymbioteRuntime>,
+  workflowId: string
+) {
+  if (isActionRuntimeCtx(context)) {
+    return await context.octokit.rest.actions.createWorkflowDispatch({
+      owner: context.env.SYMBIOTE_HOST.FORKED_REPO.owner,
+      repo: context.env.SYMBIOTE_HOST.FORKED_REPO.repo,
+      workflow_id: workflowId,
+      ref: context.config.executionBranch,
+    });
+  } else if (isEdgeRuntimeCtx(context)) {
     if (!context.request) {
-        throw new Error("Request object not available - dispatcher should only be called in worker runtime");
+      throw new Error("Request object not available - dispatcher should only be called in worker runtime");
     }
     const { pluginInputs } = context;
-    
+
     const octokit = new customOctokit({
-        auth: pluginInputs.authToken,
+      auth: pluginInputs.authToken,
     });
     const { owner, repo } = context.env.SYMBIOTE_HOST.FORKED_REPO;
 
-    if(!owner || !repo) {
+    if (!owner || !repo) {
       throw new Error("Invalid SYMBIOTE_HOST.FORKED_REPO");
     }
 
-  return await octokit.rest.actions.createWorkflowDispatch({
-    owner: context.env.SYMBIOTE_HOST.FORKED_REPO.owner,
-    repo: context.env.SYMBIOTE_HOST.FORKED_REPO.repo,
-    workflow_id: workflowId,
-    ref: context.config.executionBranch,
-    inputs: {
-      ...pluginInputs,
-      eventPayload: compressString(JSON.stringify(context.payload)),
-      settings: JSON.stringify(context.config),
-    },
-  });
+    return await octokit.rest.actions.createWorkflowDispatch({
+      owner: context.env.SYMBIOTE_HOST.FORKED_REPO.owner,
+      repo: context.env.SYMBIOTE_HOST.FORKED_REPO.repo,
+      workflow_id: workflowId,
+      ref: context.config.executionBranch,
+      inputs: {
+        ...pluginInputs,
+        eventPayload: encodeString(JSON.stringify(context.payload)),
+        settings: JSON.stringify(context.config),
+      },
+    });
+  } else {
+    throw new Error("Invalid runtime");
+  }
 }

@@ -22,7 +22,7 @@ export async function handleServerStartAction(
     }
   
     // Create runtime tracker
-    const runtimeTracker = createRuntimeTracker(env, octokit);
+    const runtimeTracker = createRuntimeTracker(env, octokit, context.config);
   
     // Start the server loop
     await runServerActionLoop(context, runtimeTracker, sessionId, runId);

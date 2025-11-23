@@ -1,9 +1,10 @@
 import { createActionsPlugin } from "@ubiquity-os/plugin-sdk";
 import { LOG_LEVEL, LogLevel } from "@ubiquity-os/ubiquity-os-logger";
 import { runSymbiote } from "./index.ts";
-import { pluginSettingsSchema, PluginSettings, SupportedEvents, Command, SupportedCustomEvents, SupportedWebhookEvents } from "./types/index";
+import { pluginSettingsSchema, PluginSettings, SupportedEvents, SupportedCustomEvents, SupportedWebhookEvents } from "./types/index";
 import { WorkflowEnv, workflowEnvSchema } from "./types/env";
 import { validateEnvironment } from "./utils/validate-env";
+import { Command } from "./types/command.ts";
 
 async function runAction() {
     process.env = validateEnvironment(process.env as Record<string, string>, "action") as unknown as Record<string, string>;
@@ -16,7 +17,10 @@ async function runAction() {
             SupportedWebhookEvents & SupportedCustomEvents
         >(
             (context) => {
-                return runSymbiote<SupportedEvents, "action">(context, "action")
+                return runSymbiote<SupportedEvents, "action">({
+                    ...context,
+                    runtime: "action",
+                })
             },
             {
                 envSchema: workflowEnvSchema,
