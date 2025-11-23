@@ -1,4 +1,3 @@
-import { getRuntimeKey } from "hono/adapter";
 import { Context, SupportedEvents, SymbioteRuntime } from "./types";
 import { workerCallbacks } from "./handlers/worker-callbacks";
 import { isActionRuntimeCtx, isEdgeRuntimeCtx } from "./types/typeguards";
@@ -12,16 +11,9 @@ import { handleCommand } from "./handlers/commands/command-handler";
 export async function runSymbiote<
   T extends SupportedEvents = SupportedEvents,
   TRuntime extends SymbioteRuntime = SymbioteRuntime
->(context: Context<T, TRuntime>) {
+>(context: Context<T, TRuntime>, runtime: TRuntime) {
   const { logger, command = null } = context;
-  const runtime = getRuntimeKey();
   let callbackResults: CallbackResult[] = [];
-
-  console.log("Confirming runtime", {
-    runtime,
-    isEdgeRuntimeCtx: isEdgeRuntimeCtx<T>(context, runtime),
-    isActionRuntimeCtx: isActionRuntimeCtx<T>(context, runtime),
-  });
 
   if (isEdgeRuntimeCtx<T>(context, runtime)) {
 

@@ -17,7 +17,7 @@ async function runAction() {
             SupportedWebhookEvents & SupportedCustomEvents
         >(
             (context) => {
-                return runSymbiote<SupportedEvents, "action">(context)
+                return runSymbiote<SupportedEvents, "action">(context, "action")
             },
             {
                 envSchema: workflowEnvSchema,

@@ -5,9 +5,9 @@ export function isCommentEvent(context: Context): context is Context<"issue_comm
 }
 
 export function isEdgeRuntimeCtx<T extends SupportedEvents = SupportedEvents>(context: Context<T, SymbioteRuntime>, runtime: string): context is Context<T, "worker"> {
-  return runtime === "deno" || runtime === "workerd"
+  return runtime === "worker";
 }
 
 export function isActionRuntimeCtx<T extends SupportedEvents = SupportedEvents>(context: Context<T, SymbioteRuntime>, runtime: string): context is Context<T, "action"> {
-  return runtime === "node" || runtime === "bun";
+  return runtime === "action";
 }

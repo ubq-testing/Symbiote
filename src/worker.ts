@@ -71,7 +71,8 @@ export default {
             ...context,
             env: validatedEnv,
             request: clonedRequest,
-          }
+          },
+          "worker"
         );
       },
       manifest as Manifest,
