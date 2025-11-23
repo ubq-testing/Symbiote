@@ -37,6 +37,7 @@ export type Context<
     TEvents extends SupportedEvents = SupportedEvents,
     TRuntime extends SymbioteRuntime = SymbioteRuntime
 > =
+    { runtime: TRuntime } &
     // worker runtime will have a request object
     (TRuntime extends "worker" ? { request: Request, pluginInputs: PluginInputs } : {})
     &

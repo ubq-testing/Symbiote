@@ -1,8 +1,9 @@
 import { RestEndpointMethodTypes } from "@ubiquity-os/plugin-sdk/octokit";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { WorkflowEnv } from "../types/env";
+import { PluginSettings } from "../types/plugin-input";
 
-const MAX_RUNTIME_HOURS = 6 - 1; // 1 hour safety buffer
+const MS_PER_HOUR = 60 * 60 * 1000;
 
 export interface RuntimeTracker {
   getCurrentRuntimeHours(): Promise<number>;
@@ -15,14 +16,19 @@ export interface RuntimeTracker {
  */
 export function createRuntimeTracker(
   env: WorkflowEnv,
-  octokit: InstanceType<typeof customOctokit>
+  octokit: InstanceType<typeof customOctokit>,
+  config: PluginSettings
 ): RuntimeTracker {
   const runId = process.env.GITHUB_RUN_ID ? parseInt(process.env.GITHUB_RUN_ID, 10) : null;
   const { owner, repo } = env.SYMBIOTE_HOST.FORKED_REPO;
 
+  const maxRuntimeHours = config.maxRuntimeHours ?? 6;
+  const safetyBufferHours = 1;
+  const maxRuntimeHoursWithBuffer = maxRuntimeHours - safetyBufferHours;
+  const cacheTtlMs = 60 * 1000;
+
   let cachedRunData: RestEndpointMethodTypes["actions"]["getWorkflowRun"]["response"]["data"] | null = null;
   let lastFetchTime: number = 0;
-  const CACHE_TTL_MS = 60 * 1000; // Cache for 1 minute
 
   async function fetchWorkflowRun(): Promise<RestEndpointMethodTypes["actions"]["getWorkflowRun"]["response"]["data"] | null> {
     if (!runId || !owner || !repo) {
@@ -30,7 +36,7 @@ export function createRuntimeTracker(
     }
 
     const now = Date.now();
-    if (cachedRunData && (now - lastFetchTime) < CACHE_TTL_MS) {
+    if (cachedRunData && (now - lastFetchTime) < cacheTtlMs) {
       return cachedRunData;
     }
 
@@ -59,12 +65,12 @@ export function createRuntimeTracker(
 
       const createdAt = new Date(runData.created_at);
       const now = new Date();
-      return (now.getTime() - createdAt.getTime()) / 3600000;
+      return (now.getTime() - createdAt.getTime()) / MS_PER_HOUR;
     },
 
     async shouldRestart(): Promise<boolean> {
       const runtimeHours = await this.getCurrentRuntimeHours();
-      return runtimeHours >= MAX_RUNTIME_HOURS;
+      return runtimeHours >= maxRuntimeHoursWithBuffer;
     },
 
     getWorkflowRunId(): number | null {
