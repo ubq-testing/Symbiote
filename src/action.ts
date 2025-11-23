@@ -13,6 +13,9 @@ async function runAction() {
         "action"
     ) as WorkflowEnv;
     process.env = validatedEnv as unknown as Record<string, string>;
+
+    console.log("Validated environment:", validatedEnv);
+    console.log("Process environment:", process.env);
     return await createActionsPlugin<
         PluginSettings,
         WorkflowEnv,
