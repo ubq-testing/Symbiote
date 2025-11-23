@@ -5,6 +5,7 @@ import { EmitterWebhookEvent, EmitterWebhookEventName } from "@octokit/webhooks"
 import { customOctokit} from "@ubiquity-os/plugin-sdk/octokit";
 import { customEventSchemas, CustomEventSchemas } from "./custom-event-schemas";
 import { Command } from "./command";
+import { PluginInputs } from "./callbacks";
 
 export type SupportedCustomEvents = "server.register";
 export type SupportedWebhookEvents = "issue_comment.created" | "issues.opened" | "pull_request.opened";
@@ -37,7 +38,7 @@ export type Context<
     TRuntime extends SymbioteRuntime = SymbioteRuntime
 > =
     // worker runtime will have a request object
-    (TRuntime extends "worker" ? { request: Request } : {})
+    (TRuntime extends "worker" ? { request: Request, pluginInputs: PluginInputs } : {})
     &
     (
         TRuntime extends "worker" ?
