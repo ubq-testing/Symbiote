@@ -80996,5 +80996,8 @@ async function runAction() {
         bypassSignatureVerification: true
     });
 }
-runAction().catch(console.error);
+runAction().catch((error) => {
+    console.trace(error);
+    process.exit(1);
+});
 
