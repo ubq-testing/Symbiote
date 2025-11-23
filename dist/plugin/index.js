@@ -80961,16 +80961,9 @@ function validateEnvironment(env, runtime) {
     catch (error) {
         if (error instanceof Error) {
             console.error("Error cleaning environment:", error.message);
-            console.log("data", {
-                env,
-                schema,
-            });
             throw new Error(`Invalid environment variables: ${error.message}`);
         }
-        console.error("Error cleaning environment:", error);
     }
-    console.log("Full environment:", env);
-    console.log("Cleaned environment:", cleanedEnv);
     if (!Check(schema, cleanedEnv)) {
         const errors = [...Errors(schema, cleanedEnv)];
         console.error(errors);
@@ -80989,16 +80982,24 @@ function validateEnvironment(env, runtime) {
 async function runAction() {
     const validatedEnv = validateEnvironment(process.env, "action");
     process.env = validatedEnv;
-    return await createActionsPlugin((context) => {
-        return runSymbiote(context);
-    }, {
-        envSchema: workflowEnvSchema,
-        postCommentOnError: true,
-        settingsSchema: pluginSettingsSchema,
-        logLevel: process.env.LOG_LEVEL ?? LOG_LEVEL.INFO,
-        kernelPublicKey: process.env.KERNEL_PUBLIC_KEY,
-        bypassSignatureVerification: true
-    });
+    console.log("Validated environment (process.env):", process.env);
+    try {
+        return await createActionsPlugin((context) => {
+            return runSymbiote(context);
+        }, {
+            envSchema: workflowEnvSchema,
+            postCommentOnError: true,
+            settingsSchema: pluginSettingsSchema,
+            logLevel: process.env.LOG_LEVEL ?? LOG_LEVEL.INFO,
+            kernelPublicKey: process.env.KERNEL_PUBLIC_KEY,
+            bypassSignatureVerification: true
+        });
+    }
+    catch (error) {
+        console.trace(error);
+        console.error("Error creating actions plugin:", error);
+        process.exit(1);
+    }
 }
 runAction().catch((error) => {
     console.trace(error);
