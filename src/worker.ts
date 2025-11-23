@@ -1,4 +1,4 @@
-import { createPlugin } from "@ubiquity-os/plugin-sdk";
+import { CommentHandler, createPlugin } from "@ubiquity-os/plugin-sdk";
 import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
 import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { ExecutionContext } from "hono";
@@ -12,25 +12,27 @@ import { CustomEventSchemas, customEventSchemas } from "./types/custom-event-sch
 import { env as honoEnv } from "hono/adapter";
 import { validateEnvironment } from "./utils/validate-env";
 import { PluginInputs } from "./types/callbacks.ts";
+import { Context } from "./types/index";
+import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
+import { ContentfulStatusCode } from "hono/utils/http-status.js";
 
 function createLogger(logLevel: LogLevel) {
   return new Logs(logLevel);
 }
 
-
-function isCustomEventGuard<T extends SupportedEvents = SupportedEvents>(event: T): event is T {
+function isCustomEventGuard<T extends SupportedCustomEvents = SupportedCustomEvents>(event: T): event is T {
   return event in customEventSchemas;
 }
 
-function validateCallbackPayload<T extends SupportedEvents = SupportedEvents>({
+function validateCallbackPayload<T extends SupportedCustomEvents = SupportedCustomEvents>({
   payload,
   logger,
-  event
+  event,
 }: {
-  payload: unknown,
-  logger: Logs,
-  event: T,
-}): CustomEventSchemas<T>["client_payload"] {
+  payload: unknown;
+  logger: Logs;
+  event: T;
+}): CustomEventSchemas<T> {
   if (!isCustomEventGuard(event)) {
     throw new Error(`Invalid event: ${event}`);
   }
@@ -43,11 +45,7 @@ function validateCallbackPayload<T extends SupportedEvents = SupportedEvents>({
     logger.error(`Invalid payload: ${errors.map((error) => error.message).join(", ")}`);
     throw new Error(`Invalid payload: ${errors.map((error) => error.message).join(", ")}`);
   }
-  return Value.Decode(payloadSchema, Value.Default(payloadSchema, cleanedPayload)).client_payload;
-}
-
-function isErrorGuard(value: unknown): value is { error: string } {
-  return typeof value === "object" && value !== null && "error" in value && typeof value.error === "string";
+  return Value.Decode(payloadSchema, Value.Default(payloadSchema, cleanedPayload));
 }
 
 export default {
@@ -62,12 +60,7 @@ export default {
       "worker"
     );
 
-    const honoApp = createPlugin<
-      PluginSettings,
-      WorkerEnv,
-      Command,
-      SupportedWebhookEvents & SupportedCustomEvents
-    >(
+    const honoApp = createPlugin<PluginSettings, WorkerEnv, Command, SupportedWebhookEvents & SupportedCustomEvents>(
       async (context) => {
         return runSymbiote<SupportedEvents, "worker">(
           {
@@ -86,12 +79,12 @@ export default {
         settingsSchema: pluginSettingsSchema,
         logLevel: (env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO,
         kernelPublicKey: env.KERNEL_PUBLIC_KEY as string,
-        bypassSignatureVerification: true
+        bypassSignatureVerification: true,
       }
     );
 
     honoApp.post("/callback", async (c) => {
-      if (typeof validatedEnv === 'object' && 'error' in validatedEnv && validatedEnv.error) {
+      if (typeof validatedEnv === "object" && "error" in validatedEnv && validatedEnv.error) {
         return c.json({ message: validatedEnv.error }, 500);
       }
 
@@ -102,23 +95,63 @@ export default {
         return c.json({ message: "Unauthorized" }, 401);
       }
 
-      const body = await c.req.json()
-      const event = c.req.header("X-GitHub-Event") as SupportedEvents;
-      console.log(`Received callback for event: ${event}`,{
+      const body = await c.req.json();
+      const event = c.req.header("X-GitHub-Event") as SupportedCustomEvents;
+      logger.info(`Received callback for event: ${event}`, {
         body,
         event,
       });
 
-      // const validatedPayload = validateCallbackPayload<Supporte 200nts>({ payload: body, logger, event });
+      // Handle custom events (server.restart, etc.)
+      if (isCustomEventGuard(event)) {
+        try {
+          const validatedPayload = validateCallbackPayload({ payload: body, logger, event });
 
-      // if (isErrorGuard(validatedPayload)) {
-      //   return c.json({ message: validatedPayload.error }, 500);
-      // }
+          async function fetchMergedConfig(): Promise<PluginSettings> {
+            return {
+              executionBranch: "development",
+            } as PluginSettings;
+          }
 
-      /**
-       * TODO: Use KV to store the session ID and workflow run ID
-       */
+          const config = await fetchMergedConfig();
 
+          // Route to appropriate handler via runSymbiote
+          const results = await runSymbiote(
+            {
+              eventName: event,
+              request: clonedRequest,
+              commentHandler: new CommentHandler(),
+              config,
+              env: validatedEnv,
+              logger: new Logs(validatedEnv.LOG_LEVEL as LogLevel),
+              payload: validatedPayload,
+              octokit: new customOctokit({
+                auth: validatedPayload.client_payload.authToken,
+              }),
+              command: null,
+              pluginInputs: {
+                stateId: validatedPayload.client_payload.stateId,
+                eventName: event,
+                eventPayload: validatedPayload,
+                settings: config,
+                ref: validatedPayload.client_payload.ref,
+                command: validatedPayload.client_payload.command,
+                authToken: validatedPayload.client_payload.authToken,
+                signature: validatedPayload.client_payload.signature,
+              },
+            } as Context<typeof event, "worker">,
+            "worker"
+          );
+
+          
+          return c.json({ ...results }, results.status as ContentfulStatusCode);
+        } catch (error) {
+          logger.error(`Error handling callback: ${error}`);
+          return c.json({ message: error instanceof Error ? error.message : String(error) }, 500);
+        }
+      }
+
+      // For webhook events, just acknowledge
       return c.body(JSON.stringify({ message: "Callback received" }), 200);
     });
 
