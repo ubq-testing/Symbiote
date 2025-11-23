@@ -80767,7 +80767,7 @@ const sharedSchema = Type.Object({
     }),
     NODE_ENV: Type.Optional(Type.Enum(NODE_ENV, { default: NODE_ENV.DEVELOPMENT })),
 });
-const workerEnvSchema = (/* unused pure expression or super */ null && (sharedSchema));
+const workerEnvSchema = sharedSchema;
 const workflowEnvSchema = Type.Intersect([sharedSchema, Type.Object({
         SYMBIOTE_HOST_PAT: Type.String({
             minLength: 1,
@@ -80802,20 +80802,186 @@ const pluginSettingsSchema = Type.Object({
 
 
 
+;// CONCATENATED MODULE: ./node_modules/@sinclair/typebox/build/esm/value/clean/clean.mjs
+
+
+
+
+
+// ------------------------------------------------------------------
+// ValueGuard
+// ------------------------------------------------------------------
+// prettier-ignore
+
+// ------------------------------------------------------------------
+// TypeGuard
+// ------------------------------------------------------------------
+// prettier-ignore
+
+// ------------------------------------------------------------------
+// IsCheckable
+// ------------------------------------------------------------------
+function IsCheckable(schema) {
+    return IsKind(schema) && schema[Kind] !== 'Unsafe';
+}
+// ------------------------------------------------------------------
+// Types
+// ------------------------------------------------------------------
+function clean_FromArray(schema, references, value) {
+    if (!IsArray(value))
+        return value;
+    return value.map((value) => clean_Visit(schema.items, references, value));
+}
+function clean_FromImport(schema, references, value) {
+    const definitions = globalThis.Object.values(schema.$defs);
+    const target = schema.$defs[schema.$ref];
+    return clean_Visit(target, [...references, ...definitions], value);
+}
+function clean_FromIntersect(schema, references, value) {
+    const unevaluatedProperties = schema.unevaluatedProperties;
+    const intersections = schema.allOf.map((schema) => clean_Visit(schema, references, clone_Clone(value)));
+    const composite = intersections.reduce((acc, value) => (IsObject(value) ? { ...acc, ...value } : value), {});
+    if (!IsObject(value) || !IsObject(composite) || !IsKind(unevaluatedProperties))
+        return composite;
+    const knownkeys = KeyOfPropertyKeys(schema);
+    for (const key of Object.getOwnPropertyNames(value)) {
+        if (knownkeys.includes(key))
+            continue;
+        if (Check(unevaluatedProperties, references, value[key])) {
+            composite[key] = clean_Visit(unevaluatedProperties, references, value[key]);
+        }
+    }
+    return composite;
+}
+function clean_FromObject(schema, references, value) {
+    if (!IsObject(value) || IsArray(value))
+        return value; // Check IsArray for AllowArrayObject configuration
+    const additionalProperties = schema.additionalProperties;
+    for (const key of Object.getOwnPropertyNames(value)) {
+        if (HasPropertyKey(schema.properties, key)) {
+            value[key] = clean_Visit(schema.properties[key], references, value[key]);
+            continue;
+        }
+        if (IsKind(additionalProperties) && Check(additionalProperties, references, value[key])) {
+            value[key] = clean_Visit(additionalProperties, references, value[key]);
+            continue;
+        }
+        delete value[key];
+    }
+    return value;
+}
+function clean_FromRecord(schema, references, value) {
+    if (!IsObject(value))
+        return value;
+    const additionalProperties = schema.additionalProperties;
+    const propertyKeys = Object.getOwnPropertyNames(value);
+    const [propertyKey, propertySchema] = Object.entries(schema.patternProperties)[0];
+    const propertyKeyTest = new RegExp(propertyKey);
+    for (const key of propertyKeys) {
+        if (propertyKeyTest.test(key)) {
+            value[key] = clean_Visit(propertySchema, references, value[key]);
+            continue;
+        }
+        if (IsKind(additionalProperties) && Check(additionalProperties, references, value[key])) {
+            value[key] = clean_Visit(additionalProperties, references, value[key]);
+            continue;
+        }
+        delete value[key];
+    }
+    return value;
+}
+function clean_FromRef(schema, references, value) {
+    return clean_Visit(Deref(schema, references), references, value);
+}
+function clean_FromThis(schema, references, value) {
+    return clean_Visit(Deref(schema, references), references, value);
+}
+function clean_FromTuple(schema, references, value) {
+    if (!IsArray(value))
+        return value;
+    if (IsUndefined(schema.items))
+        return [];
+    const length = Math.min(value.length, schema.items.length);
+    for (let i = 0; i < length; i++) {
+        value[i] = clean_Visit(schema.items[i], references, value[i]);
+    }
+    // prettier-ignore
+    return value.length > length
+        ? value.slice(0, length)
+        : value;
+}
+function clean_FromUnion(schema, references, value) {
+    for (const inner of schema.anyOf) {
+        if (IsCheckable(inner) && Check(inner, references, value)) {
+            return clean_Visit(inner, references, value);
+        }
+    }
+    return value;
+}
+function clean_Visit(schema, references, value) {
+    const references_ = IsString(schema.$id) ? Pushref(schema, references) : references;
+    const schema_ = schema;
+    switch (schema_[Kind]) {
+        case 'Array':
+            return clean_FromArray(schema_, references_, value);
+        case 'Import':
+            return clean_FromImport(schema_, references_, value);
+        case 'Intersect':
+            return clean_FromIntersect(schema_, references_, value);
+        case 'Object':
+            return clean_FromObject(schema_, references_, value);
+        case 'Record':
+            return clean_FromRecord(schema_, references_, value);
+        case 'Ref':
+            return clean_FromRef(schema_, references_, value);
+        case 'This':
+            return clean_FromThis(schema_, references_, value);
+        case 'Tuple':
+            return clean_FromTuple(schema_, references_, value);
+        case 'Union':
+            return clean_FromUnion(schema_, references_, value);
+        default:
+            return value;
+    }
+}
+/** `[Mutable]` Removes excess properties from a value and returns the result. This function does not check the value and returns an unknown type. You should Check the result before use. Clean is a mutable operation. To avoid mutation, Clone the value first. */
+function Clean(...args) {
+    return args.length === 3 ? clean_Visit(args[0], args[1], args[2]) : clean_Visit(args[0], [], args[1]);
+}
+
+;// CONCATENATED MODULE: ./src/utils/validate-env.ts
+
+
+function validateEnvironment(env, runtime) {
+    const schema = runtime === "worker" ? workerEnvSchema : workflowEnvSchema;
+    const cleanedEnv = Clean(schema, env);
+    if (!Check(schema, cleanedEnv)) {
+        const errors = [...Errors(schema, cleanedEnv)];
+        throw new Error(`Invalid environment variables: ${errors.map((error) => error.message).join(", ")}`);
+    }
+    return Decode(schema, default_Default(schema, cleanedEnv));
+}
+
 ;// CONCATENATED MODULE: ./src/action.ts
 
 
 
 
 
-createActionsPlugin((context) => {
-    return runSymbiote(context);
-}, {
-    envSchema: workflowEnvSchema,
-    postCommentOnError: true,
-    settingsSchema: pluginSettingsSchema,
-    logLevel: process.env.LOG_LEVEL ?? LOG_LEVEL.INFO,
-    kernelPublicKey: process.env.KERNEL_PUBLIC_KEY,
-    bypassSignatureVerification: true
-}).catch(console.error);
+
+async function runAction() {
+    const validatedEnv = validateEnvironment(process.env, "action");
+    process.env = validatedEnv;
+    return await createActionsPlugin((context) => {
+        return runSymbiote(context);
+    }, {
+        envSchema: workflowEnvSchema,
+        postCommentOnError: true,
+        settingsSchema: pluginSettingsSchema,
+        logLevel: process.env.LOG_LEVEL ?? LOG_LEVEL.INFO,
+        kernelPublicKey: process.env.KERNEL_PUBLIC_KEY,
+        bypassSignatureVerification: true
+    });
+}
+runAction().catch(console.error);
 
