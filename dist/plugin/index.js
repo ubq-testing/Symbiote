@@ -80410,6 +80410,9 @@ async function dispatcher(context, workflowId = "compute.yml") {
  * calls instead.
  */
 async function workflowDispatch(context, workflowId) {
+    if (!context.request) {
+        throw new Error("Request object not available - dispatcher should only be called in worker runtime");
+    }
     const payload = (await context.request.json()); // required cast
     const octokit = new octokit_customOctokit({
         auth: payload.authToken,
@@ -80656,6 +80659,7 @@ async function runSymbiote(context) {
         callbackResults = results;
     }
     else if (isActionRuntimeCtx(context, runtime)) {
+        console.log("Confirming action runtime");
         const results = await handleCallbacks(context, actionCallbacks);
         if ("status" in results) {
             throw logger.error(`Fatal error in callbacks: ${results.reason}`);
@@ -80987,7 +80991,6 @@ function validateEnvironment(env, runtime) {
 async function runAction() {
     const validatedEnv = validateEnvironment(process.env, "action");
     process.env = validatedEnv;
-    console.log("Validated environment (process.env):", process.env);
     try {
         return await createActionsPlugin((context) => {
             return runSymbiote(context);
