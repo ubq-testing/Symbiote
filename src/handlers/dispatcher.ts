@@ -25,6 +25,9 @@ export async function dispatcher(context: Context<SupportedEvents, "worker">, wo
  * calls instead.
  */
 async function workflowDispatch<T extends SupportedEvents = SupportedEvents>(context: Context<T, "worker">, workflowId: string) {
+    if (!context.request) {
+        throw new Error("Request object not available - dispatcher should only be called in worker runtime");
+    }
     const payload = (await context.request.json()) as PluginInputs; // required cast
 
     const octokit = new customOctokit({

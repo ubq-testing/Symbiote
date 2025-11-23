@@ -32,6 +32,7 @@ export async function runSymbiote<
     callbackResults = results;
 
   } else if (isActionRuntimeCtx<T>(context, runtime)) {
+    console.log("Confirming action runtime");
     const results = await handleCallbacks(context, actionCallbacks);
 
     if ("status" in results) {

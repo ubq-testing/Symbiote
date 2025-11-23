@@ -8,7 +8,6 @@ import { validateEnvironment } from "./utils/validate-env";
 async function runAction() {
     const validatedEnv = validateEnvironment(process.env as Record<string, string>, "action") as WorkflowEnv;
     process.env = validatedEnv as unknown as Record<string, string>;
-    console.log("Validated environment (process.env):", process.env);
 
     try {
         return await createActionsPlugin<
