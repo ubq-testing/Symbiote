@@ -80969,6 +80969,7 @@ function validateEnvironment(env, runtime) {
         }
         console.error("Error cleaning environment:", error);
     }
+    console.log("Full environment:", env);
     console.log("Cleaned environment:", cleanedEnv);
     if (!Check(schema, cleanedEnv)) {
         const errors = [...Errors(schema, cleanedEnv)];
