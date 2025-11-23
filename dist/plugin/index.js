@@ -80957,6 +80957,7 @@ function validateEnvironment(env, runtime) {
     const cleanedEnv = Clean(schema, env);
     if (!Check(schema, cleanedEnv)) {
         const errors = [...Errors(schema, cleanedEnv)];
+        console.error(errors);
         throw new Error(`Invalid environment variables: ${errors.map((error) => error.message).join(", ")}`);
     }
     return Decode(schema, default_Default(schema, cleanedEnv));
