@@ -1,6 +1,6 @@
 import { Value } from "@sinclair/typebox/value";
 import { workerEnvSchema, workflowEnvSchema } from "../types/env";
-import { SymbioteRuntime } from "../types";
+import { SymbioteRuntime } from "../types/index";
 import { StaticDecode } from "@sinclair/typebox";
 
 export function validateEnvironment(env: Record<string, string>, runtime: SymbioteRuntime) {

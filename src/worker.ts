@@ -4,7 +4,7 @@ import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { ExecutionContext } from "hono";
 import manifest from "../manifest.json" with { type: "json" };
 import { runSymbiote } from "./index.ts";
-import { workerEnvSchema, pluginSettingsSchema, PluginSettings, SupportedEvents, Command, SupportedCustomEvents, Context, SupportedWebhookEvents } from "./types";
+import { workerEnvSchema, pluginSettingsSchema, PluginSettings, SupportedEvents, Command, SupportedCustomEvents, Context, SupportedWebhookEvents } from "./types/index";
 import { WorkerEnv } from "./types/env";
 import { Value } from "@sinclair/typebox/value";
 import { CustomEventSchemas, customEventSchemas } from "./types/custom-event-schemas";

@@ -1,4 +1,4 @@
-import { Context, SupportedEvents } from "../types";
+import { Context, SupportedEvents } from "../types/index";
 import { PluginInputs } from "../types/callbacks";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { CallbackResult } from "../types/callbacks";

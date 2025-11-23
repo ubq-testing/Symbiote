@@ -1,4 +1,4 @@
-import { Context, SupportedEvents } from "../../types";
+import { Context, SupportedEvents } from "../../types/index";
 import { handleSymbioteServer } from "../worker/symbiote-server";
 
 

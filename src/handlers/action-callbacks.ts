@@ -1,4 +1,4 @@
-import { Context } from "../types";
+import { Context } from "../types/index";
 import { CallbackResult, HandlerCallbacks } from "../types/callbacks";
 
 async function handleIssueCommentAction(context: Context<"issue_comment.created", "action">): Promise<CallbackResult> {

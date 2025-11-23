@@ -1,5 +1,5 @@
 import { RestEndpointMethodTypes } from "@ubiquity-os/plugin-sdk/octokit";
-import { Context } from "../../types";
+import { Context } from "../../types/index";
 import { dispatcher } from "../dispatcher";
 
 export class SymbioteServer {

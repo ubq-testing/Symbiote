@@ -1,4 +1,4 @@
-import { Context } from "../../types";
+import { Context } from "../../types/index";
 import { SymbioteServer } from "../server/spawn-server";
 
 export async function handleSymbioteServer(context: Context<"issue_comment.created", "worker">) {

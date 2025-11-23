@@ -1,4 +1,4 @@
-import { Context } from "../../types";
+import { Context } from "../../types/index";
 import { CallbackResult } from "../../types/callbacks";
 
 export async function handleServerCallback(context: Context<"server.register", "worker">): Promise<CallbackResult> {

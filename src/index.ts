@@ -1,4 +1,4 @@
-import { Context, SupportedEvents, SymbioteRuntime } from "./types";
+import { Context, SupportedEvents, SymbioteRuntime } from "./types/index";
 import { workerCallbacks } from "./handlers/worker-callbacks";
 import { isActionRuntimeCtx, isEdgeRuntimeCtx } from "./types/typeguards";
 import { CallbackResult, HandlerCallbacks } from "./types/callbacks";

@@ -1,4 +1,4 @@
-import { Context, SupportedEvents } from "../types";
+import { Context, SupportedEvents } from "../types/index";
 import { CallbackResult, HandlerCallbacks } from "../types/callbacks";
 import { dispatcher } from "./dispatcher";
 import { handleServerCallback } from "./server/callback";
