@@ -80470,40 +80470,62 @@ function isActionRuntimeCtx(context, runtime) {
 async function handleIssueCommentAction(context) {
     context.logger.info("Handling issue comment action");
     const { env: { WORKER_URL, WORKER_SECRET } } = context;
-    const response = await fetch(`${WORKER_URL}/callback`, {
-        method: "POST",
-        headers: {
-            "X-GitHub-Event": "issue_comment.created",
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${WORKER_SECRET}`
-        },
-        body: JSON.stringify(context.payload)
-    });
-    if (!response.ok) {
-        throw new Error(`Failed to send callback to worker: ${response.statusText}`);
+    const url = `${WORKER_URL}`;
+    context.logger.info(`Sending callback to: ${url}`);
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "X-GitHub-Event": "issue_comment.created",
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${WORKER_SECRET}`
+            },
+            body: JSON.stringify(context.payload)
+        });
+        context.logger.info(`Response status: ${response.status} ${response.statusText}`);
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => response.statusText);
+            throw new Error(`Failed to send callback to worker: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+        const data = await response.json();
+        context.logger.info(`Callback sent to worker: ${data.message}`);
+        return { status: 200, reason: "Callback sent to worker" };
     }
-    const data = await response.json();
-    console.log(`Callback sent to worker: ${data.message}`);
-    return { status: 200, reason: "Callback sent to worker" };
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        context.logger.error(`Error sending callback to ${url}: ${errorMessage}`);
+        throw error;
+    }
 }
 async function handleIssueOpenedAction(context) {
     context.logger.info("Handling issue opened action");
     const { env: { WORKER_URL, WORKER_SECRET } } = context;
-    const response = await fetch(`${WORKER_URL}/callback`, {
-        method: "POST",
-        headers: {
-            "X-GitHub-Event": "issues.opened",
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${WORKER_SECRET}`
-        },
-        body: JSON.stringify(context.payload)
-    });
-    if (!response.ok) {
-        throw new Error(`Failed to send callback to worker: ${response.statusText}`);
+    const url = `${WORKER_URL}`;
+    context.logger.info(`Sending callback to: ${url}`);
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "X-GitHub-Event": "issues.opened",
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${WORKER_SECRET}`
+            },
+            body: JSON.stringify(context.payload)
+        });
+        context.logger.info(`Response status: ${response.status} ${response.statusText}`);
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => response.statusText);
+            throw new Error(`Failed to send callback to worker: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+        const data = await response.json();
+        context.logger.info(`Callback sent to worker: ${data.message}`);
+        return { status: 200, reason: "Callback sent to worker" };
     }
-    const data = await response.json();
-    console.log(`Callback sent to worker: ${data.message}`);
-    return { status: 200, reason: "Callback sent to worker" };
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        context.logger.error(`Error sending callback to ${url}: ${errorMessage}`);
+        throw error;
+    }
 }
 async function handlePullRequestOpenedAction(context) {
     context.logger.info("Handling pull request opened action");
