@@ -33,4 +33,7 @@ async function runAction() {
         })
 }
 
-runAction().catch(console.error);
+runAction().catch((error) => {
+    console.trace(error);
+    process.exit(1);
+});
