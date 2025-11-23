@@ -3,7 +3,6 @@ import { workerCallbacks } from "./handlers/worker-callbacks";
 import { isActionRuntimeCtx, isEdgeRuntimeCtx } from "./types/typeguards";
 import { CallbackResult, HandlerCallbacks } from "./types/callbacks";
 import { actionCallbacks } from "./handlers/action-callbacks";
-import { handleCommand } from "./handlers/commands/command-handler";
 
 /**
  * The main plugin function. Split for easier testing.
@@ -12,15 +11,10 @@ export async function runSymbiote<
   T extends SupportedEvents = SupportedEvents,
   TRuntime extends SymbioteRuntime = SymbioteRuntime
 >(context: Context<T, TRuntime>, runtime: TRuntime) {
-  const { logger, command = null } = context;
+  const { logger } = context;
   let callbackResults: CallbackResult[] = [];
 
   if (isEdgeRuntimeCtx<T>(context, runtime)) {
-
-    if (command) {
-      return await handleCommand(context as Context<"issue_comment.created", "worker">);
-    }
-
     const results = await handleCallbacks(context, workerCallbacks);
 
     if ("status" in results) {
