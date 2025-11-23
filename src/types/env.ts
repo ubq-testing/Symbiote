@@ -83,7 +83,7 @@ const sharedSchema = T.Object({
 export const workerEnvSchema = sharedSchema;
 export type WorkerEnv = StaticDecode<typeof workerEnvSchema>;
 
-export const workflowEnvSchema = T.Intersect([sharedSchema, T.Object({
+export const workflowEnvSchema = T.Composite([sharedSchema, T.Object({
   SYMBIOTE_HOST_PAT: T.String({
     minLength: 1,
     description: "A GitHub personal access token belonging to the SYMBIOTE_HOST_USERNAME.",

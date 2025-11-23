@@ -8,7 +8,7 @@ export function validateEnvironment(env: Parameters<typeof honoEnv>[0], runtime:
   const schema = runtime === "worker" ? workerEnvSchema : workflowEnvSchema;
   let cleanedEnv: StaticDecode<typeof schema> | undefined;
   try {
-    cleanedEnv = Value.Clean(schema, Value.Decode(schema, Value.Default(schema, cleanedEnv))) as StaticDecode<typeof schema>;
+    cleanedEnv = Value.Clean(schema, env) as StaticDecode<typeof schema>;
   }catch(error: unknown) {
     if(error instanceof Error) {
       console.error("Error cleaning environment:", error.message);
