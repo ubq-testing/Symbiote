@@ -10,6 +10,11 @@ export const pluginSettingsSchema = T.Object(
       description: "The branch to use for the Symbiote workflow.",
       default: "development" as const,
     }),
+    test: T.String({
+      minLength: 1,
+      description: "A test string.",
+      default: "test" as const,
+    }),
   },
   { default: {} }
 );
