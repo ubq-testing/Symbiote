@@ -1,23 +1,43 @@
 {
-  "name": "ts-template",
-  "description": "ts-template for UbiquityOS plugins.",
+  "name": "Symbiote",
+  "description": "A proactive GitHub automation agent that responds to configured events and commands.",
+  "ubiquity:listeners": ["issue_comment.created", "issues.opened", "pull_request.opened"],
   "commands": {
-    "hello": {
-      "ubiquity:example": "/hello argument",
-      "description": "Hello command with an argument."
+    "symbiote": {
+      "ubiquity:example": "/symbiote",
+      "description": "Manage your Symbiote.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "description": "The actions to perform.",
+            "type": "array",
+            "items": {
+              "description": "The action to perform.",
+              "type": "string"
+            }
+          }
+        }
+      }
     }
   },
   "configuration": {
     "default": {},
     "type": "object",
     "properties": {
-      "configurableResponse": {
-        "default": "Hello, world!",
+      "executionBranch": {
+        "minLength": 1,
+        "description": "The branch to use for the Symbiote workflow.",
+        "default": "development",
         "type": "string"
       },
-      "customStringsUrl": {
+      "test": {
+        "minLength": 1,
+        "description": "A test string.",
+        "default": "test",
         "type": "string"
       }
     }
-  }
+  },
+  "homepage_url": "https://keyrxng-symbiote.deno.dev"
 }

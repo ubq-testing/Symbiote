@@ -1,14 +1,13 @@
-import { Context } from "./context";
+import { Context, SupportedEvents, SymbioteRuntime } from "./context";
 
-/**
- * Typeguards are most helpful when you have a union type, and you want to narrow it down to a specific one.
- * In other words, if `SupportedEvents` has multiple types then these restrict the scope
- * of `context` to a specific event payload.
- */
+export function isCommentEvent(context: Context): context is Context<"issue_comment.created"> {
+  return context.eventName === "issue_comment.created";
+}
 
-/**
- * Restricts the scope of `context` to the `issue_comment.created` payload.
- */
-export function isCommentEvent(context: Context): context is Context {
-  return context.eventName === "issue_comment.created" || context.eventName === "pull_request_review_comment.created";
+export function isEdgeRuntimeCtx<T extends SupportedEvents = SupportedEvents>(context: Context<T, SymbioteRuntime>, runtime: string): context is Context<T, "worker"> {
+  return runtime === "worker";
+}
+
+export function isActionRuntimeCtx<T extends SupportedEvents = SupportedEvents>(context: Context<T, SymbioteRuntime>, runtime: string): context is Context<T, "action"> {
+  return runtime === "action";
 }

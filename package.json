@@ -1,7 +1,7 @@
 {
-  "name": "plugin-template",
+  "name": "symbiote",
   "version": "1.0.0",
-  "description": "Ubiquibot plugin template repository with TypeScript support.",
+  "description": "Symbiote - A proactive GitHub automation agent that polls user events and acts on their behalf.",
   "author": "Ubiquity DAO",
   "license": "MIT",
   "main": "src/worker.ts",
@@ -34,7 +34,7 @@
     "open-source"
   ],
   "dependencies": {
-    "@sinclair/typebox": "0.34.41",
+    "@sinclair/typebox": "^0.34.41",
     "@ubiquity-os/plugin-sdk": "^3.4.0",
     "@ubiquity-os/ubiquity-os-logger": "^1.4.0",
     "dotenv": "17.2.3",
@@ -50,11 +50,13 @@
     "@eslint/js": "9.39.1",
     "@jest/globals": "30.2.0",
     "@mswjs/data": "0.16.2",
+    "@octokit/webhooks": "^14.1.3",
     "@swc/core": "^1.15.2",
     "@swc/jest": "^0.2.39",
     "@types/jest": "^30.0.0",
     "@types/node": "24.10.1",
     "@ubiquity-os/eslint-plugin-no-empty-strings": "^1.0.3",
+    "@vercel/ncc": "0.38.4",
     "cross-env": "^10.1.0",
     "cspell": "9.3.2",
     "eslint": "9.39.1",
@@ -68,7 +70,7 @@
     "lint-staged": "16.2.6",
     "npm-run-all": "4.1.5",
     "prettier": "3.6.2",
-    "typescript": "5.9.3",
+    "typescript": "^5.9.3",
     "typescript-eslint": "8.47.0",
     "wrangler": "4.47.0"
   },

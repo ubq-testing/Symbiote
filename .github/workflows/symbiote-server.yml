@@ -1,0 +1,94 @@
+name: Symbiote Server
+
+on:
+  workflow_dispatch:
+    inputs:
+      session_id:
+        description: 'Session ID for this workflow instance'
+        required: true
+        type: string
+      user_id:
+        description: 'GitHub user ID'
+        required: true
+        type: string
+      callback_url:
+        description: 'Worker callback URL'
+        required: true
+        type: string
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: read
+      # Add other permissions as needed
+
+    steps:
+    - name: Register session with worker
+      run: |
+        curl -X POST "${{ inputs.callback_url }}" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "action": "server.register",
+            "client_payload": {
+              "sessionId": "${{ inputs.session_id }}",
+              "workflowRunId": "${{ github.run_id }}",
+              "repository": "${{ github.repository }}"
+            }
+          }'
+
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run Symbiote workflow server
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        SESSION_ID: ${{ inputs.session_id }}
+        USER_ID: ${{ inputs.user_id }}
+        CALLBACK_URL: ${{ inputs.callback_url }}
+      run: |
+        # This Node.js application will:
+        # 1. Poll for user events every 60 seconds
+        # 2. Process events that require user authentication
+        # 3. Handle state-based requests from the worker
+        # 4. Store processed event data
+
+        echo "Starting Symbiote main workflow server"
+        echo "Session ID: $SESSION_ID"
+        echo "User ID: $USER_ID"
+
+        # For now, simulate the workflow behavior
+        # In production, this would run a Node.js server
+        timeout 6h bash -c '
+          while true; do
+            echo "Polling for events and processing queue... $(date)"
+            # In real implementation:
+            # - Poll GitHub API for user events
+            # - Check for queued unsafe actions from worker
+            # - Process events with user authentication
+            # - Send results back to worker
+            sleep 60
+          done
+        ' || echo "Workflow completed or timed out"
+
+    - name: Notify worker of completion
+      if: always()
+      run: |
+        curl -X POST "${{ inputs.callback_url }}" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "sessionId": "${{ inputs.session_id }}",
+            "workflowRunId": "${{ github.run_id }}",
+            "status": "completed"
+          }'

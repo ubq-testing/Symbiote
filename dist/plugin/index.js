@@ -1,4 +1,4 @@
-import './sourcemap-register.cjs';import { createRequire as __WEBPACK_EXTERNAL_createRequire } from "module";
+import { createRequire as __WEBPACK_EXTERNAL_createRequire } from "module";
 /******/ var __webpack_modules__ = ({
 
 /***/ 4914:
@@ -31338,522 +31338,6 @@ class Deprecation extends Error {
 }
 
 exports.Deprecation = Deprecation;
-
-
-/***/ }),
-
-/***/ 2874:
-/***/ ((__unused_webpack_module, __unused_webpack_exports, __nccwpck_require__) => {
-
-(function () {
-  (__nccwpck_require__(8889).config)(
-    Object.assign(
-      {},
-      __nccwpck_require__(9990),
-      __nccwpck_require__(4531)(process.argv)
-    )
-  )
-})()
-
-
-/***/ }),
-
-/***/ 4531:
-/***/ ((module) => {
-
-const re = /^dotenv_config_(encoding|path|quiet|debug|override|DOTENV_KEY)=(.+)$/
-
-module.exports = function optionMatcher (args) {
-  const options = args.reduce(function (acc, cur) {
-    const matches = cur.match(re)
-    if (matches) {
-      acc[matches[1]] = matches[2]
-    }
-    return acc
-  }, {})
-
-  if (!('quiet' in options)) {
-    options.quiet = 'true'
-  }
-
-  return options
-}
-
-
-/***/ }),
-
-/***/ 9990:
-/***/ ((module) => {
-
-// ../config.js accepts options via environment variables
-const options = {}
-
-if (process.env.DOTENV_CONFIG_ENCODING != null) {
-  options.encoding = process.env.DOTENV_CONFIG_ENCODING
-}
-
-if (process.env.DOTENV_CONFIG_PATH != null) {
-  options.path = process.env.DOTENV_CONFIG_PATH
-}
-
-if (process.env.DOTENV_CONFIG_QUIET != null) {
-  options.quiet = process.env.DOTENV_CONFIG_QUIET
-}
-
-if (process.env.DOTENV_CONFIG_DEBUG != null) {
-  options.debug = process.env.DOTENV_CONFIG_DEBUG
-}
-
-if (process.env.DOTENV_CONFIG_OVERRIDE != null) {
-  options.override = process.env.DOTENV_CONFIG_OVERRIDE
-}
-
-if (process.env.DOTENV_CONFIG_DOTENV_KEY != null) {
-  options.DOTENV_KEY = process.env.DOTENV_CONFIG_DOTENV_KEY
-}
-
-module.exports = options
-
-
-/***/ }),
-
-/***/ 8889:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const fs = __nccwpck_require__(9896)
-const path = __nccwpck_require__(6928)
-const os = __nccwpck_require__(857)
-const crypto = __nccwpck_require__(6982)
-const packageJson = __nccwpck_require__(56)
-
-const version = packageJson.version
-
-// Array of tips to display randomly
-const TIPS = [
-  '🔐 encrypt with Dotenvx: https://dotenvx.com',
-  '🔐 prevent committing .env to code: https://dotenvx.com/precommit',
-  '🔐 prevent building .env in docker: https://dotenvx.com/prebuild',
-  '📡 add observability to secrets: https://dotenvx.com/ops',
-  '👥 sync secrets across teammates & machines: https://dotenvx.com/ops',
-  '🗂️ backup and recover secrets: https://dotenvx.com/ops',
-  '✅ audit secrets and track compliance: https://dotenvx.com/ops',
-  '🔄 add secrets lifecycle management: https://dotenvx.com/ops',
-  '🔑 add access controls to secrets: https://dotenvx.com/ops',
-  '🛠️  run anywhere with `dotenvx run -- yourcommand`',
-  '⚙️  specify custom .env file path with { path: \'/custom/path/.env\' }',
-  '⚙️  enable debug logging with { debug: true }',
-  '⚙️  override existing env vars with { override: true }',
-  '⚙️  suppress all logs with { quiet: true }',
-  '⚙️  write to custom object with { processEnv: myObject }',
-  '⚙️  load multiple .env files with { path: [\'.env.local\', \'.env\'] }'
-]
-
-// Get a random tip from the tips array
-function _getRandomTip () {
-  return TIPS[Math.floor(Math.random() * TIPS.length)]
-}
-
-function parseBoolean (value) {
-  if (typeof value === 'string') {
-    return !['false', '0', 'no', 'off', ''].includes(value.toLowerCase())
-  }
-  return Boolean(value)
-}
-
-function supportsAnsi () {
-  return process.stdout.isTTY // && process.env.TERM !== 'dumb'
-}
-
-function dim (text) {
-  return supportsAnsi() ? `\x1b[2m${text}\x1b[0m` : text
-}
-
-const LINE = /(?:^|^)\s*(?:export\s+)?([\w.-]+)(?:\s*=\s*?|:\s+?)(\s*'(?:\\'|[^'])*'|\s*"(?:\\"|[^"])*"|\s*`(?:\\`|[^`])*`|[^#\r\n]+)?\s*(?:#.*)?(?:$|$)/mg
-
-// Parse src into an Object
-function parse (src) {
-  const obj = {}
-
-  // Convert buffer to string
-  let lines = src.toString()
-
-  // Convert line breaks to same format
-  lines = lines.replace(/\r\n?/mg, '\n')
-
-  let match
-  while ((match = LINE.exec(lines)) != null) {
-    const key = match[1]
-
-    // Default undefined or null to empty string
-    let value = (match[2] || '')
-
-    // Remove whitespace
-    value = value.trim()
-
-    // Check if double quoted
-    const maybeQuote = value[0]
-
-    // Remove surrounding quotes
-    value = value.replace(/^(['"`])([\s\S]*)\1$/mg, '$2')
-
-    // Expand newlines if double quoted
-    if (maybeQuote === '"') {
-      value = value.replace(/\\n/g, '\n')
-      value = value.replace(/\\r/g, '\r')
-    }
-
-    // Add to object
-    obj[key] = value
-  }
-
-  return obj
-}
-
-function _parseVault (options) {
-  options = options || {}
-
-  const vaultPath = _vaultPath(options)
-  options.path = vaultPath // parse .env.vault
-  const result = DotenvModule.configDotenv(options)
-  if (!result.parsed) {
-    const err = new Error(`MISSING_DATA: Cannot parse ${vaultPath} for an unknown reason`)
-    err.code = 'MISSING_DATA'
-    throw err
-  }
-
-  // handle scenario for comma separated keys - for use with key rotation
-  // example: DOTENV_KEY="dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=prod,dotenv://:key_7890@dotenvx.com/vault/.env.vault?environment=prod"
-  const keys = _dotenvKey(options).split(',')
-  const length = keys.length
-
-  let decrypted
-  for (let i = 0; i < length; i++) {
-    try {
-      // Get full key
-      const key = keys[i].trim()
-
-      // Get instructions for decrypt
-      const attrs = _instructions(result, key)
-
-      // Decrypt
-      decrypted = DotenvModule.decrypt(attrs.ciphertext, attrs.key)
-
-      break
-    } catch (error) {
-      // last key
-      if (i + 1 >= length) {
-        throw error
-      }
-      // try next key
-    }
-  }
-
-  // Parse decrypted .env string
-  return DotenvModule.parse(decrypted)
-}
-
-function _warn (message) {
-  console.error(`[dotenv@${version}][WARN] ${message}`)
-}
-
-function _debug (message) {
-  console.log(`[dotenv@${version}][DEBUG] ${message}`)
-}
-
-function _log (message) {
-  console.log(`[dotenv@${version}] ${message}`)
-}
-
-function _dotenvKey (options) {
-  // prioritize developer directly setting options.DOTENV_KEY
-  if (options && options.DOTENV_KEY && options.DOTENV_KEY.length > 0) {
-    return options.DOTENV_KEY
-  }
-
-  // secondary infra already contains a DOTENV_KEY environment variable
-  if (process.env.DOTENV_KEY && process.env.DOTENV_KEY.length > 0) {
-    return process.env.DOTENV_KEY
-  }
-
-  // fallback to empty string
-  return ''
-}
-
-function _instructions (result, dotenvKey) {
-  // Parse DOTENV_KEY. Format is a URI
-  let uri
-  try {
-    uri = new URL(dotenvKey)
-  } catch (error) {
-    if (error.code === 'ERR_INVALID_URL') {
-      const err = new Error('INVALID_DOTENV_KEY: Wrong format. Must be in valid uri format like dotenv://:key_1234@dotenvx.com/vault/.env.vault?environment=development')
-      err.code = 'INVALID_DOTENV_KEY'
-      throw err
-    }
-
-    throw error
-  }
-
-  // Get decrypt key
-  const key = uri.password
-  if (!key) {
-    const err = new Error('INVALID_DOTENV_KEY: Missing key part')
-    err.code = 'INVALID_DOTENV_KEY'
-    throw err
-  }
-
-  // Get environment
-  const environment = uri.searchParams.get('environment')
-  if (!environment) {
-    const err = new Error('INVALID_DOTENV_KEY: Missing environment part')
-    err.code = 'INVALID_DOTENV_KEY'
-    throw err
-  }
-
-  // Get ciphertext payload
-  const environmentKey = `DOTENV_VAULT_${environment.toUpperCase()}`
-  const ciphertext = result.parsed[environmentKey] // DOTENV_VAULT_PRODUCTION
-  if (!ciphertext) {
-    const err = new Error(`NOT_FOUND_DOTENV_ENVIRONMENT: Cannot locate environment ${environmentKey} in your .env.vault file.`)
-    err.code = 'NOT_FOUND_DOTENV_ENVIRONMENT'
-    throw err
-  }
-
-  return { ciphertext, key }
-}
-
-function _vaultPath (options) {
-  let possibleVaultPath = null
-
-  if (options && options.path && options.path.length > 0) {
-    if (Array.isArray(options.path)) {
-      for (const filepath of options.path) {
-        if (fs.existsSync(filepath)) {
-          possibleVaultPath = filepath.endsWith('.vault') ? filepath : `${filepath}.vault`
-        }
-      }
-    } else {
-      possibleVaultPath = options.path.endsWith('.vault') ? options.path : `${options.path}.vault`
-    }
-  } else {
-    possibleVaultPath = path.resolve(process.cwd(), '.env.vault')
-  }
-
-  if (fs.existsSync(possibleVaultPath)) {
-    return possibleVaultPath
-  }
-
-  return null
-}
-
-function _resolveHome (envPath) {
-  return envPath[0] === '~' ? path.join(os.homedir(), envPath.slice(1)) : envPath
-}
-
-function _configVault (options) {
-  const debug = parseBoolean(process.env.DOTENV_CONFIG_DEBUG || (options && options.debug))
-  const quiet = parseBoolean(process.env.DOTENV_CONFIG_QUIET || (options && options.quiet))
-
-  if (debug || !quiet) {
-    _log('Loading env from encrypted .env.vault')
-  }
-
-  const parsed = DotenvModule._parseVault(options)
-
-  let processEnv = process.env
-  if (options && options.processEnv != null) {
-    processEnv = options.processEnv
-  }
-
-  DotenvModule.populate(processEnv, parsed, options)
-
-  return { parsed }
-}
-
-function configDotenv (options) {
-  const dotenvPath = path.resolve(process.cwd(), '.env')
-  let encoding = 'utf8'
-  let processEnv = process.env
-  if (options && options.processEnv != null) {
-    processEnv = options.processEnv
-  }
-  let debug = parseBoolean(processEnv.DOTENV_CONFIG_DEBUG || (options && options.debug))
-  let quiet = parseBoolean(processEnv.DOTENV_CONFIG_QUIET || (options && options.quiet))
-
-  if (options && options.encoding) {
-    encoding = options.encoding
-  } else {
-    if (debug) {
-      _debug('No encoding is specified. UTF-8 is used by default')
-    }
-  }
-
-  let optionPaths = [dotenvPath] // default, look for .env
-  if (options && options.path) {
-    if (!Array.isArray(options.path)) {
-      optionPaths = [_resolveHome(options.path)]
-    } else {
-      optionPaths = [] // reset default
-      for (const filepath of options.path) {
-        optionPaths.push(_resolveHome(filepath))
-      }
-    }
-  }
-
-  // Build the parsed data in a temporary object (because we need to return it).  Once we have the final
-  // parsed data, we will combine it with process.env (or options.processEnv if provided).
-  let lastError
-  const parsedAll = {}
-  for (const path of optionPaths) {
-    try {
-      // Specifying an encoding returns a string instead of a buffer
-      const parsed = DotenvModule.parse(fs.readFileSync(path, { encoding }))
-
-      DotenvModule.populate(parsedAll, parsed, options)
-    } catch (e) {
-      if (debug) {
-        _debug(`Failed to load ${path} ${e.message}`)
-      }
-      lastError = e
-    }
-  }
-
-  const populated = DotenvModule.populate(processEnv, parsedAll, options)
-
-  // handle user settings DOTENV_CONFIG_ options inside .env file(s)
-  debug = parseBoolean(processEnv.DOTENV_CONFIG_DEBUG || debug)
-  quiet = parseBoolean(processEnv.DOTENV_CONFIG_QUIET || quiet)
-
-  if (debug || !quiet) {
-    const keysCount = Object.keys(populated).length
-    const shortPaths = []
-    for (const filePath of optionPaths) {
-      try {
-        const relative = path.relative(process.cwd(), filePath)
-        shortPaths.push(relative)
-      } catch (e) {
-        if (debug) {
-          _debug(`Failed to load ${filePath} ${e.message}`)
-        }
-        lastError = e
-      }
-    }
-
-    _log(`injecting env (${keysCount}) from ${shortPaths.join(',')} ${dim(`-- tip: ${_getRandomTip()}`)}`)
-  }
-
-  if (lastError) {
-    return { parsed: parsedAll, error: lastError }
-  } else {
-    return { parsed: parsedAll }
-  }
-}
-
-// Populates process.env from .env file
-function config (options) {
-  // fallback to original dotenv if DOTENV_KEY is not set
-  if (_dotenvKey(options).length === 0) {
-    return DotenvModule.configDotenv(options)
-  }
-
-  const vaultPath = _vaultPath(options)
-
-  // dotenvKey exists but .env.vault file does not exist
-  if (!vaultPath) {
-    _warn(`You set DOTENV_KEY but you are missing a .env.vault file at ${vaultPath}. Did you forget to build it?`)
-
-    return DotenvModule.configDotenv(options)
-  }
-
-  return DotenvModule._configVault(options)
-}
-
-function decrypt (encrypted, keyStr) {
-  const key = Buffer.from(keyStr.slice(-64), 'hex')
-  let ciphertext = Buffer.from(encrypted, 'base64')
-
-  const nonce = ciphertext.subarray(0, 12)
-  const authTag = ciphertext.subarray(-16)
-  ciphertext = ciphertext.subarray(12, -16)
-
-  try {
-    const aesgcm = crypto.createDecipheriv('aes-256-gcm', key, nonce)
-    aesgcm.setAuthTag(authTag)
-    return `${aesgcm.update(ciphertext)}${aesgcm.final()}`
-  } catch (error) {
-    const isRange = error instanceof RangeError
-    const invalidKeyLength = error.message === 'Invalid key length'
-    const decryptionFailed = error.message === 'Unsupported state or unable to authenticate data'
-
-    if (isRange || invalidKeyLength) {
-      const err = new Error('INVALID_DOTENV_KEY: It must be 64 characters long (or more)')
-      err.code = 'INVALID_DOTENV_KEY'
-      throw err
-    } else if (decryptionFailed) {
-      const err = new Error('DECRYPTION_FAILED: Please check your DOTENV_KEY')
-      err.code = 'DECRYPTION_FAILED'
-      throw err
-    } else {
-      throw error
-    }
-  }
-}
-
-// Populate process.env with parsed values
-function populate (processEnv, parsed, options = {}) {
-  const debug = Boolean(options && options.debug)
-  const override = Boolean(options && options.override)
-  const populated = {}
-
-  if (typeof parsed !== 'object') {
-    const err = new Error('OBJECT_REQUIRED: Please check the processEnv argument being passed to populate')
-    err.code = 'OBJECT_REQUIRED'
-    throw err
-  }
-
-  // Set process.env
-  for (const key of Object.keys(parsed)) {
-    if (Object.prototype.hasOwnProperty.call(processEnv, key)) {
-      if (override === true) {
-        processEnv[key] = parsed[key]
-        populated[key] = parsed[key]
-      }
-
-      if (debug) {
-        if (override === true) {
-          _debug(`"${key}" is already defined and WAS overwritten`)
-        } else {
-          _debug(`"${key}" is already defined and was NOT overwritten`)
-        }
-      }
-    } else {
-      processEnv[key] = parsed[key]
-      populated[key] = parsed[key]
-    }
-  }
-
-  return populated
-}
-
-const DotenvModule = {
-  configDotenv,
-  _configVault,
-  _parseVault,
-  config,
-  decrypt,
-  parse,
-  populate
-}
-
-module.exports.configDotenv = DotenvModule.configDotenv
-module.exports._configVault = DotenvModule._configVault
-module.exports._parseVault = DotenvModule._parseVault
-module.exports.config = DotenvModule.config
-module.exports.decrypt = DotenvModule.decrypt
-module.exports.parse = DotenvModule.parse
-module.exports.populate = DotenvModule.populate
-
-module.exports = DotenvModule
 
 
 /***/ }),
@@ -66590,13 +66074,6 @@ __webpack_unused_export__ = defaultContentType
 
 module.exports = /*#__PURE__*/JSON.parse('{"name":"dotenv","version":"16.4.7","description":"Loads environment variables from .env file","main":"lib/main.js","types":"lib/main.d.ts","exports":{".":{"types":"./lib/main.d.ts","require":"./lib/main.js","default":"./lib/main.js"},"./config":"./config.js","./config.js":"./config.js","./lib/env-options":"./lib/env-options.js","./lib/env-options.js":"./lib/env-options.js","./lib/cli-options":"./lib/cli-options.js","./lib/cli-options.js":"./lib/cli-options.js","./package.json":"./package.json"},"scripts":{"dts-check":"tsc --project tests/types/tsconfig.json","lint":"standard","pretest":"npm run lint && npm run dts-check","test":"tap run --allow-empty-coverage --disable-coverage --timeout=60000","test:coverage":"tap run --show-full-coverage --timeout=60000 --coverage-report=lcov","prerelease":"npm test","release":"standard-version"},"repository":{"type":"git","url":"git://github.com/motdotla/dotenv.git"},"funding":"https://dotenvx.com","keywords":["dotenv","env",".env","environment","variables","config","settings"],"readmeFilename":"README.md","license":"BSD-2-Clause","devDependencies":{"@types/node":"^18.11.3","decache":"^4.6.2","sinon":"^14.0.1","standard":"^17.0.0","standard-version":"^9.5.0","tap":"^19.2.0","typescript":"^4.8.4"},"engines":{"node":">=12"},"browser":{"fs":false}}');
 
-/***/ }),
-
-/***/ 56:
-/***/ ((module) => {
-
-module.exports = /*#__PURE__*/JSON.parse('{"name":"dotenv","version":"17.2.3","description":"Loads environment variables from .env file","main":"lib/main.js","types":"lib/main.d.ts","exports":{".":{"types":"./lib/main.d.ts","require":"./lib/main.js","default":"./lib/main.js"},"./config":"./config.js","./config.js":"./config.js","./lib/env-options":"./lib/env-options.js","./lib/env-options.js":"./lib/env-options.js","./lib/cli-options":"./lib/cli-options.js","./lib/cli-options.js":"./lib/cli-options.js","./package.json":"./package.json"},"scripts":{"dts-check":"tsc --project tests/types/tsconfig.json","lint":"standard","pretest":"npm run lint && npm run dts-check","test":"tap run tests/**/*.js --allow-empty-coverage --disable-coverage --timeout=60000","test:coverage":"tap run tests/**/*.js --show-full-coverage --timeout=60000 --coverage-report=text --coverage-report=lcov","prerelease":"npm test","release":"standard-version"},"repository":{"type":"git","url":"git://github.com/motdotla/dotenv.git"},"homepage":"https://github.com/motdotla/dotenv#readme","funding":"https://dotenvx.com","keywords":["dotenv","env",".env","environment","variables","config","settings"],"readmeFilename":"README.md","license":"BSD-2-Clause","devDependencies":{"@types/node":"^18.11.3","decache":"^4.6.2","sinon":"^14.0.1","standard":"^17.0.0","standard-version":"^9.5.0","tap":"^19.2.0","typescript":"^4.8.4"},"engines":{"node":">=12"},"browser":{"fs":false}}');
-
 /***/ })
 
 /******/ });
@@ -66678,11 +66155,6 @@ module.exports = /*#__PURE__*/JSON.parse('{"name":"dotenv","version":"17.2.3","d
 /******/ 
 /************************************************************************/
 var __webpack_exports__ = {};
-
-// EXPORTS
-__nccwpck_require__.d(__webpack_exports__, {
-  A: () => (/* binding */ action)
-});
 
 // NAMESPACE OBJECT: ./node_modules/@sinclair/typebox/build/esm/type/type/type.mjs
 var type_type_namespaceObject = {};
@@ -71137,7 +70609,7 @@ var endpoint = withDefaults(null, DEFAULTS);
 
 // EXTERNAL MODULE: ./node_modules/fast-content-type-parse/index.js
 var fast_content_type_parse = __nccwpck_require__(8739);
-;// CONCATENATED MODULE: ./node_modules/@octokit/request-error/dist-src/index.js
+;// CONCATENATED MODULE: ./node_modules/@octokit/request/node_modules/@octokit/request-error/dist-src/index.js
 class RequestError extends Error {
   name;
   /**
@@ -74744,6 +74216,46 @@ legacyRestEndpointMethods.VERSION = dist_src_version_VERSION;
 
 // EXTERNAL MODULE: ./node_modules/bottleneck/light.js
 var light = __nccwpck_require__(3251);
+;// CONCATENATED MODULE: ./node_modules/@octokit/plugin-retry/node_modules/@octokit/request-error/dist-src/index.js
+class dist_src_RequestError extends Error {
+  name;
+  /**
+   * http status code
+   */
+  status;
+  /**
+   * Request options that lead to the error.
+   */
+  request;
+  /**
+   * Response object if a response was received
+   */
+  response;
+  constructor(message, statusCode, options) {
+    super(message);
+    this.name = "HttpError";
+    this.status = Number.parseInt(statusCode);
+    if (Number.isNaN(this.status)) {
+      this.status = 0;
+    }
+    if ("response" in options) {
+      this.response = options.response;
+    }
+    const requestCopy = Object.assign({}, options.request);
+    if (options.request.headers.authorization) {
+      requestCopy.headers = Object.assign({}, options.request.headers, {
+        authorization: options.request.headers.authorization.replace(
+          /(?<! ) .*$/,
+          " [REDACTED]"
+        )
+      });
+    }
+    requestCopy.url = requestCopy.url.replace(/\bclient_secret=\w+/g, "client_secret=[REDACTED]").replace(/\baccess_token=\w+/g, "access_token=[REDACTED]");
+    this.request = requestCopy;
+  }
+}
+
+
 ;// CONCATENATED MODULE: ./node_modules/@octokit/plugin-retry/dist-bundle/index.js
 // pkg/dist-src/version.js
 var plugin_retry_dist_bundle_VERSION = "0.0.0-development";
@@ -74784,7 +74296,7 @@ async function requestWithGraphqlErrorHandling(state, octokit, request, options)
   if (response.data && response.data.errors && response.data.errors.length > 0 && /Something went wrong while executing your query/.test(
     response.data.errors[0].message
   )) {
-    const error = new RequestError(response.data.errors[0].message, 500, {
+    const error = new dist_src_RequestError(response.data.errors[0].message, 500, {
       request: options,
       response
     });
@@ -80848,97 +80360,500 @@ function createPlugin(handler, manifest, options) {
 }
 
 
-;// CONCATENATED MODULE: ./src/handlers/hello-world.ts
+;// CONCATENATED MODULE: ./node_modules/@ubiquity-os/plugin-sdk/dist/octokit.mjs
+// src/octokit.ts
+
+
+
+
+
+
+var octokit_defaultOptions = {
+  throttle: {
+    onAbuseLimit: (retryAfter, options, octokit) => {
+      octokit.log.warn(`Abuse limit hit with "${options.method} ${options.url}", retrying in ${retryAfter} seconds.`);
+      return true;
+    },
+    onRateLimit: (retryAfter, options, octokit) => {
+      octokit.log.warn(`Rate limit hit with "${options.method} ${options.url}", retrying in ${retryAfter} seconds.`);
+      return true;
+    },
+    onSecondaryRateLimit: (retryAfter, options, octokit) => {
+      octokit.log.warn(`Secondary rate limit hit with "${options.method} ${options.url}", retrying in ${retryAfter} seconds.`);
+      return true;
+    }
+  }
+};
+var octokit_customOctokit = Octokit.plugin(throttling, retry, paginateRest, restEndpointMethods, paginateGraphQL).defaults((instanceOptions) => {
+  return { ...octokit_defaultOptions, ...instanceOptions };
+});
+
+
+;// CONCATENATED MODULE: ./src/handlers/dispatcher.ts
+
+
+function dispatcher_compressString(str) {
+    const input = Buffer.from(str, "utf8");
+    const compressed = (0,external_node_zlib_.brotliCompressSync)(input);
+    return Buffer.from(compressed).toString("base64");
+}
+async function dispatcher(context, workflowId = "compute.yml") {
+    const result = await workflowDispatch(context, workflowId);
+    if (result.status !== 204) {
+        return { status: result.status, reason: JSON.stringify(result.data) };
+    }
+    return { status: 200, reason: "Workflow dispatched" };
+}
 /**
- * NOTICE: Remove this file or use it as a template for your own plugins.
- *
- * This encapsulates the logic for a plugin if the only thing it does is say "Hello, world!".
- *
- * Try it out by running your local kernel worker and running the `bun worker` command.
- * Comment on an issue in a repository where your GitHub App is installed and see the magic happen!
- *
- * Logger examples are provided to show how to log different types of data.
+ * This is intended for smaller main workflow-detached jobs. Use-case not fully
+ * confirmed yet. Might remove this in the future and prefer main workflow
+ * calls instead.
  */
-async function helloWorld(context) {
-    const { logger, payload, config: { configurableResponse, customStringsUrl }, commentHandler, } = context;
-    const sender = payload.comment.user?.login;
-    const repo = payload.repository.name;
-    const issueNumber = "issue" in payload ? payload.issue.number : payload.pull_request.number;
-    const owner = payload.repository.owner.login;
-    const body = payload.comment.body;
-    if (!RegExp(/^\/hello/i).exec(body)) {
-        logger.error(`Invalid use of slash command, use "/hello".`, { body });
-        return;
+async function workflowDispatch(context, workflowId) {
+    if (!context.request) {
+        throw new Error("Request object not available - dispatcher should only be called in worker runtime");
     }
-    logger.info("Hello, world!");
-    logger.debug(`Executing helloWorld:`, { sender, repo, issueNumber, owner });
-    await commentHandler.postComment(context, logger.ok(configurableResponse));
-    if (customStringsUrl) {
-        const response = await fetch(customStringsUrl).then((value) => value.json());
-        await commentHandler.postComment(context, logger.ok(response.greeting));
+    const payload = (await context.request.json()); // required cast
+    const octokit = new octokit_customOctokit({
+        auth: payload.authToken,
+    });
+    const { owner, repo } = context.env.SYMBIOTE_HOST.FORKED_REPO;
+    if (!owner || !repo) {
+        throw new Error("Invalid SYMBIOTE_HOST.FORKED_REPO");
     }
-    // Throw errors get posted by the SDK if "postCommentOnError" is set to true.
-    logger.ok(`Successfully created comment!`);
-    logger.verbose(`Exiting helloWorld`);
+    return await octokit.rest.actions.createWorkflowDispatch({
+        owner: context.env.SYMBIOTE_HOST.FORKED_REPO.owner,
+        repo: context.env.SYMBIOTE_HOST.FORKED_REPO.repo,
+        workflow_id: workflowId,
+        ref: context.config.executionBranch,
+        inputs: {
+            ...payload,
+            eventPayload: dispatcher_compressString(JSON.stringify(context.payload)),
+            settings: JSON.stringify(context.config),
+        },
+    });
 }
 
+;// CONCATENATED MODULE: ./src/handlers/server/callback.ts
+async function handleServerCallback(context) {
+    const { logger, eventName, payload } = context;
+    logger.info(`Handling server callback for event: ${eventName}`);
+    logger.info(`Payload: ${JSON.stringify(payload)}`);
+    return { status: 200, reason: "Success" };
+}
+
+;// CONCATENATED MODULE: ./src/handlers/worker-callbacks.ts
+
+
+async function handleIssueCommentWorker(context) {
+    context.logger.info("Handling issue comment worker");
+    return { status: 200, reason: "Issue comment worker" };
+}
+const workerCallbacks = {
+    "issue_comment.created": [handleIssueCommentWorker],
+    "issues.opened": [dispatcher], // offloading to a main-workflow-detached job
+    "server.register": [handleServerCallback],
+};
+
 ;// CONCATENATED MODULE: ./src/types/typeguards.ts
-/**
- * Typeguards are most helpful when you have a union type, and you want to narrow it down to a specific one.
- * In other words, if `SupportedEvents` has multiple types then these restrict the scope
- * of `context` to a specific event payload.
- */
-/**
- * Restricts the scope of `context` to the `issue_comment.created` payload.
- */
 function isCommentEvent(context) {
-    return context.eventName === "issue_comment.created" || context.eventName === "pull_request_review_comment.created";
+    return context.eventName === "issue_comment.created";
+}
+function isEdgeRuntimeCtx(context, runtime) {
+    return runtime === "worker";
+}
+function isActionRuntimeCtx(context, runtime) {
+    return runtime === "action";
+}
+
+;// CONCATENATED MODULE: ./src/handlers/action-callbacks.ts
+async function handleIssueCommentAction(context) {
+    context.logger.info("Handling issue comment action");
+    const { env: { WORKER_URL, WORKER_SECRET } } = context;
+    const url = `${WORKER_URL}`;
+    context.logger.info(`Sending callback to: ${url}`);
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "X-GitHub-Event": "issue_comment.created",
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${WORKER_SECRET}`
+            },
+            body: JSON.stringify(context.payload)
+        });
+        context.logger.info(`Response status: ${response.status} ${response.statusText}`);
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => response.statusText);
+            throw new Error(`Failed to send callback to worker: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+        const data = await response.json();
+        context.logger.info(`Callback sent to worker: ${data.message}`);
+        return { status: 200, reason: "Callback sent to worker" };
+    }
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        context.logger.error(`Error sending callback to ${url}: ${errorMessage}`);
+        throw error;
+    }
+}
+async function handleIssueOpenedAction(context) {
+    context.logger.info("Handling issue opened action");
+    const { env: { WORKER_URL, WORKER_SECRET } } = context;
+    const url = `${WORKER_URL}`;
+    context.logger.info(`Sending callback to: ${url}`);
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "X-GitHub-Event": "issues.opened",
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${WORKER_SECRET}`
+            },
+            body: JSON.stringify(context.payload)
+        });
+        context.logger.info(`Response status: ${response.status} ${response.statusText}`);
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => response.statusText);
+            throw new Error(`Failed to send callback to worker: ${response.status} ${response.statusText} - ${errorText}`);
+        }
+        const data = await response.json();
+        context.logger.info(`Callback sent to worker: ${data.message}`);
+        return { status: 200, reason: "Callback sent to worker" };
+    }
+    catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        context.logger.error(`Error sending callback to ${url}: ${errorMessage}`);
+        throw error;
+    }
+}
+async function handlePullRequestOpenedAction(context) {
+    context.logger.info("Handling pull request opened action");
+    return { status: 200, reason: "Pull request opened" };
+}
+const actionCallbacks = {
+    "issue_comment.created": [handleIssueCommentAction],
+    "issues.opened": [handleIssueOpenedAction],
+    "pull_request.opened": [handlePullRequestOpenedAction],
+};
+
+;// CONCATENATED MODULE: ./src/handlers/server/spawn-server.ts
+
+class SymbioteServer {
+    _context;
+    _workflowId;
+    _serverStatus = null;
+    _maxRuntimeHours = 6 - 1; // 1 hour safety buffer
+    _currentRuntimeHours = 0;
+    _currentRunData = null;
+    constructor(_context, _workflowId = "symbiote-server.yml") {
+        this._context = _context;
+        this._workflowId = _workflowId;
+    }
+    /**
+     * - Check if the server is running
+     * - If the server is running, check if it has been running for too long
+     * - If the server has been running for too long, stop the server and spawn a new one
+     * - If the server is not running, spawn a new server
+     */
+    async init() {
+        await this.checkServerDetails();
+        let needsRestart = false;
+        let isRunning = false;
+        // if the server is running, check if it has been running for too long
+        if (this._currentRunData && this._currentRunData.status === "in_progress") {
+            const createdAt = new Date(this._currentRunData.created_at);
+            const now = new Date();
+            this._currentRuntimeHours = (now.getTime() - createdAt.getTime()) / 3600000;
+            if (this._currentRuntimeHours >= this._maxRuntimeHours) {
+                needsRestart = true;
+                isRunning = true;
+            }
+            else {
+                this._context.logger.info(`Symbiote server is running`, { currentRunData: this._currentRunData });
+            }
+        }
+        // if the server is not running, set the status to stopped
+        if (!this._currentRunData || this._currentRunData.status !== "in_progress") {
+            needsRestart = true;
+            isRunning = false;
+        }
+        return { needsRestart, isRunning, runData: this._currentRunData };
+    }
+    async restartServer(context) {
+        const { logger } = context;
+        logger.info(`Restarting Symbiote server`);
+        await this.stopServer(context);
+        return await this.spawnServer(context);
+    }
+    async spawnServer(context) {
+        if (this._serverStatus !== "stopped") {
+            throw new Error("Server is already running");
+        }
+        const { logger } = context;
+        logger.info(`Spawning Symbiote server`);
+        return await dispatcher(context, this._workflowId);
+    }
+    async stopServer(context) {
+        const { logger, octokit, env } = context;
+        logger.info(`Stopping Symbiote server`);
+        if (!this._currentRunData?.id) {
+            throw logger.error(`Cannot stop Symbiote server: No run data found`);
+        }
+        await octokit.rest.actions.cancelWorkflowRun({
+            owner: env.SYMBIOTE_HOST.USERNAME,
+            repo: env.SYMBIOTE_HOST.FORKED_REPO.repo,
+            workflow_id: this._workflowId,
+            run_id: this._currentRunData.id,
+        });
+        // confirm the server has been stopped
+        await this.checkServerDetails();
+        if (this._serverStatus === "running") {
+            throw logger.error(`Cannot stop Symbiote server: Server is still running`);
+        }
+        return true;
+    }
+    // see if we have a server running
+    async checkServerDetails() {
+        const { env, octokit } = this._context;
+        const response = await octokit.rest.actions.listWorkflowRuns({
+            owner: env.SYMBIOTE_HOST.USERNAME,
+            repo: env.SYMBIOTE_HOST.FORKED_REPO.repo,
+            workflow_id: this._workflowId,
+        });
+        this._currentRunData = response.data.workflow_runs[0];
+        this._serverStatus = this._currentRunData?.status === "in_progress" ? "running" : "stopped";
+    }
+}
+
+;// CONCATENATED MODULE: ./src/handlers/worker/symbiote-server.ts
+
+async function handleSymbioteServer(context) {
+    const server = new SymbioteServer(context);
+    const result = await server.init();
+    const { isRunning, needsRestart } = result;
+    if (!needsRestart && isRunning) {
+        return {
+            status: "running",
+            message: "Symbiote server is already running",
+            data: result,
+        };
+    }
+    if (needsRestart && !isRunning) {
+        return {
+            status: "starting",
+            message: "Starting Symbiote server",
+            data: await server.spawnServer(context),
+        };
+    }
+    if (needsRestart && isRunning) {
+        return {
+            status: "restarting",
+            message: "Restarting Symbiote server",
+            data: await server.restartServer(context),
+        };
+    }
+    throw new Error("Failed to check Symbiote server status");
+}
+
+;// CONCATENATED MODULE: ./src/handlers/commands/command-handler.ts
+
+function parseCommand({ command, }) {
+    if (!command)
+        return;
+    const [action, subAction] = command.split(".");
+    return {
+        action: action,
+        subAction: subAction
+    };
+}
+const commandHandlers = {
+    "server": {
+        "spawn": handleSymbioteServer,
+        "restart": handleSymbioteServer,
+        "stop": handleSymbioteServer,
+    },
+};
+async function handleCommand(context) {
+    const { command, logger } = context;
+    const parsedCommand = parseCommand({ command: command?.action });
+    if (!parsedCommand)
+        return;
+    const { action, subAction } = parsedCommand;
+    const handler = commandHandlers[action][subAction];
+    if (!handler) {
+        throw logger.error(`Unknown command action: ${action}.${subAction}`, { command });
+    }
+    return await handler(context);
 }
 
 ;// CONCATENATED MODULE: ./src/index.ts
 
 
+
+
 /**
  * The main plugin function. Split for easier testing.
  */
-async function runPlugin(context) {
-    const { logger, eventName } = context;
-    if (isCommentEvent(context)) {
-        return await helloWorld(context);
+async function runSymbiote(context, runtime) {
+    const { logger, command = null } = context;
+    let callbackResults = [];
+    if (isEdgeRuntimeCtx(context, runtime)) {
+        if (command) {
+            return await handleCommand(context);
+        }
+        const results = await handleCallbacks(context, workerCallbacks);
+        if ("status" in results) {
+            throw logger.error(`Fatal error in callbacks: ${results.reason}`);
+        }
+        callbackResults = results;
     }
-    logger.error(`Unsupported event: ${eventName}`);
+    else if (isActionRuntimeCtx(context, runtime)) {
+        console.log("Confirming action runtime");
+        const results = await handleCallbacks(context, actionCallbacks);
+        if ("status" in results) {
+            throw logger.error(`Fatal error in callbacks: ${results.reason}`);
+        }
+        callbackResults = results;
+    }
+    else {
+        throw logger.error(`Unsupported runtime: ${runtime}. Only worker and action runtimes are supported.`);
+    }
+    if (callbackResults.length) {
+        for (const callback of callbackResults) {
+            if (callback.status !== 200) {
+                logger.error(`Error in callback: ${callback.reason}`);
+                return { status: callback.status, reason: callback.reason };
+            }
+            else {
+                logger.ok(`Callback successful: ${callback.reason}`);
+            }
+        }
+    }
+    return { status: 200, reason: "Success" };
+}
+async function handleCallbacks(context, callbacks) {
+    const { logger, eventName } = context;
+    const eventCallbacks = callbacks[eventName];
+    if (!eventCallbacks || !eventCallbacks?.length) {
+        logger.error(`No callbacks found for event: ${eventName}`);
+        return { status: 404, reason: "No callbacks found" };
+    }
+    return await Promise.all(eventCallbacks.map((callback) => callback(context)));
 }
 
-// EXTERNAL MODULE: ./node_modules/dotenv/config.js
-var config = __nccwpck_require__(2874);
 ;// CONCATENATED MODULE: ./src/types/env.ts
 
 
 
-/**
- * Define sensitive environment variables here.
- *
- * These are fed into the worker/workflow as `env` and are
- * taken from either `dev.vars` or repository secrets.
- * They are used with `process.env` but are type-safe.
- */
-const envSchema = Type.Object({
-    LOG_LEVEL: Type.Optional(Type.Enum(LOG_LEVEL, { default: LOG_LEVEL.INFO })),
-    KERNEL_PUBLIC_KEY: Type.Optional(Type.String()),
+const symbioteHostSchema = Type.Object({
+    USERNAME: Type.String({
+        minLength: 1,
+        examples: ["keyrxng", "GithubUserName"],
+        description: "The GitHub login of the host user (user.login not user.name).",
+        pattern: "^[a-zA-Z0-9_-]+$",
+    }),
+    FORKED_REPO: Type.Transform(Type.Union([
+        Type.String(),
+        Type.Object({
+            owner: Type.String({
+                minLength: 1,
+                examples: ["keyrxng"],
+                description: "The owner of the repository where the host forked the Symbiote repository to host the bot",
+                pattern: "^[a-zA-Z0-9_-]+$",
+            }),
+            repo: Type.String({
+                minLength: 1,
+                examples: ["Symbiote"],
+                description: "The name of the repository where the host forked the Symbiote repository to host the bot",
+                pattern: "^[a-zA-Z0-9_-]+$",
+            })
+        }),
+    ]))
+        .Decode((value) => {
+        if (typeof value === "string") {
+            const [owner, repo] = value.split("/");
+            if (!owner || !repo) {
+                throw new Error("Undefined SYMBIOTE_HOST.FORKED_REPO");
+            }
+            return { owner, repo };
+        }
+        return value;
+    }).Encode((value) => {
+        if (!value.owner || !value.repo) {
+            throw new Error("Invalid SYMBIOTE_HOST.FORKED_REPO");
+        }
+        return `${value.owner}/${value.repo}`;
+    }),
 });
+const NODE_ENV = {
+    DEVELOPMENT: "development",
+    PRODUCTION: "production",
+    LOCAL: "local",
+};
+const sharedSchema = Type.Object({
+    SYMBIOTE_HOST: Type.Transform(Type.Union([symbioteHostSchema, Type.String()]))
+        .Decode((value) => {
+        if (typeof value === "string") {
+            try {
+                const parsed = JSON.parse(value);
+                if (!Check(symbioteHostSchema, parsed)) {
+                    throw new Error("Invalid SYMBIOTE_HOST");
+                }
+                return Decode(symbioteHostSchema, default_Default(symbioteHostSchema, parsed));
+            }
+            catch (error) {
+                throw new Error("Invalid SYMBIOTE_HOST");
+            }
+        }
+        return value;
+    })
+        .Encode((value) => {
+        return JSON.stringify(value);
+    }),
+    APP_ID: Type.String({ minLength: 1 }),
+    APP_PRIVATE_KEY: Type.String({ minLength: 1 }),
+    KERNEL_PUBLIC_KEY: Type.Optional(Type.String()),
+    LOG_LEVEL: Type.Optional(Type.Enum(LOG_LEVEL, { default: LOG_LEVEL.INFO })),
+    WORKER_SECRET: Type.String({
+        minLength: 1,
+        description: "A shared secret between the worker and the action."
+    }),
+    NODE_ENV: Type.Optional(Type.Enum(NODE_ENV, { default: NODE_ENV.DEVELOPMENT })),
+});
+const workerEnvSchema = sharedSchema;
+const workflowEnvSchema = Type.Composite([sharedSchema, Type.Object({
+        SYMBIOTE_HOST_PAT: Type.String({
+            minLength: 1,
+            description: "A GitHub personal access token belonging to the SYMBIOTE_HOST_USERNAME.",
+        }),
+        PLUGIN_GITHUB_TOKEN: Type.String({
+            minLength: 1,
+            description: "Required by the SDK or it'll throw and only used to return data to the kernel, which is not used in this plugin.",
+            default: "N/A",
+        }),
+        WORKER_URL: Type.String({
+            minLength: 1,
+            description: "The URL of the Symbiote worker to use for the plugin."
+        }),
+    })]);
 
 ;// CONCATENATED MODULE: ./src/types/plugin-input.ts
 
 /**
- * This should contain the properties of the bot config
- * that are required for the plugin to function.
- *
- * The kernel will extract those and pass them to the plugin,
- * which are built into the context object from setup().
+ * Plugin settings for Symbiote automation agent.
  */
 const pluginSettingsSchema = Type.Object({
-    configurableResponse: Type.String({ default: "Hello, world!" }),
-    customStringsUrl: Type.Optional(Type.String()),
+    executionBranch: Type.String({
+        minLength: 1,
+        description: "The branch to use for the Symbiote workflow.",
+        default: "development",
+    }),
+    test: Type.String({
+        minLength: 1,
+        description: "A test string.",
+        default: "test",
+    }),
 }, { default: {} });
 
 ;// CONCATENATED MODULE: ./src/types/index.ts
@@ -80946,23 +80861,206 @@ const pluginSettingsSchema = Type.Object({
 
 
 
+;// CONCATENATED MODULE: ./node_modules/@sinclair/typebox/build/esm/value/clean/clean.mjs
+
+
+
+
+
+// ------------------------------------------------------------------
+// ValueGuard
+// ------------------------------------------------------------------
+// prettier-ignore
+
+// ------------------------------------------------------------------
+// TypeGuard
+// ------------------------------------------------------------------
+// prettier-ignore
+
+// ------------------------------------------------------------------
+// IsCheckable
+// ------------------------------------------------------------------
+function IsCheckable(schema) {
+    return IsKind(schema) && schema[Kind] !== 'Unsafe';
+}
+// ------------------------------------------------------------------
+// Types
+// ------------------------------------------------------------------
+function clean_FromArray(schema, references, value) {
+    if (!IsArray(value))
+        return value;
+    return value.map((value) => clean_Visit(schema.items, references, value));
+}
+function clean_FromImport(schema, references, value) {
+    const definitions = globalThis.Object.values(schema.$defs);
+    const target = schema.$defs[schema.$ref];
+    return clean_Visit(target, [...references, ...definitions], value);
+}
+function clean_FromIntersect(schema, references, value) {
+    const unevaluatedProperties = schema.unevaluatedProperties;
+    const intersections = schema.allOf.map((schema) => clean_Visit(schema, references, clone_Clone(value)));
+    const composite = intersections.reduce((acc, value) => (IsObject(value) ? { ...acc, ...value } : value), {});
+    if (!IsObject(value) || !IsObject(composite) || !IsKind(unevaluatedProperties))
+        return composite;
+    const knownkeys = KeyOfPropertyKeys(schema);
+    for (const key of Object.getOwnPropertyNames(value)) {
+        if (knownkeys.includes(key))
+            continue;
+        if (Check(unevaluatedProperties, references, value[key])) {
+            composite[key] = clean_Visit(unevaluatedProperties, references, value[key]);
+        }
+    }
+    return composite;
+}
+function clean_FromObject(schema, references, value) {
+    if (!IsObject(value) || IsArray(value))
+        return value; // Check IsArray for AllowArrayObject configuration
+    const additionalProperties = schema.additionalProperties;
+    for (const key of Object.getOwnPropertyNames(value)) {
+        if (HasPropertyKey(schema.properties, key)) {
+            value[key] = clean_Visit(schema.properties[key], references, value[key]);
+            continue;
+        }
+        if (IsKind(additionalProperties) && Check(additionalProperties, references, value[key])) {
+            value[key] = clean_Visit(additionalProperties, references, value[key]);
+            continue;
+        }
+        delete value[key];
+    }
+    return value;
+}
+function clean_FromRecord(schema, references, value) {
+    if (!IsObject(value))
+        return value;
+    const additionalProperties = schema.additionalProperties;
+    const propertyKeys = Object.getOwnPropertyNames(value);
+    const [propertyKey, propertySchema] = Object.entries(schema.patternProperties)[0];
+    const propertyKeyTest = new RegExp(propertyKey);
+    for (const key of propertyKeys) {
+        if (propertyKeyTest.test(key)) {
+            value[key] = clean_Visit(propertySchema, references, value[key]);
+            continue;
+        }
+        if (IsKind(additionalProperties) && Check(additionalProperties, references, value[key])) {
+            value[key] = clean_Visit(additionalProperties, references, value[key]);
+            continue;
+        }
+        delete value[key];
+    }
+    return value;
+}
+function clean_FromRef(schema, references, value) {
+    return clean_Visit(Deref(schema, references), references, value);
+}
+function clean_FromThis(schema, references, value) {
+    return clean_Visit(Deref(schema, references), references, value);
+}
+function clean_FromTuple(schema, references, value) {
+    if (!IsArray(value))
+        return value;
+    if (IsUndefined(schema.items))
+        return [];
+    const length = Math.min(value.length, schema.items.length);
+    for (let i = 0; i < length; i++) {
+        value[i] = clean_Visit(schema.items[i], references, value[i]);
+    }
+    // prettier-ignore
+    return value.length > length
+        ? value.slice(0, length)
+        : value;
+}
+function clean_FromUnion(schema, references, value) {
+    for (const inner of schema.anyOf) {
+        if (IsCheckable(inner) && Check(inner, references, value)) {
+            return clean_Visit(inner, references, value);
+        }
+    }
+    return value;
+}
+function clean_Visit(schema, references, value) {
+    const references_ = IsString(schema.$id) ? Pushref(schema, references) : references;
+    const schema_ = schema;
+    switch (schema_[Kind]) {
+        case 'Array':
+            return clean_FromArray(schema_, references_, value);
+        case 'Import':
+            return clean_FromImport(schema_, references_, value);
+        case 'Intersect':
+            return clean_FromIntersect(schema_, references_, value);
+        case 'Object':
+            return clean_FromObject(schema_, references_, value);
+        case 'Record':
+            return clean_FromRecord(schema_, references_, value);
+        case 'Ref':
+            return clean_FromRef(schema_, references_, value);
+        case 'This':
+            return clean_FromThis(schema_, references_, value);
+        case 'Tuple':
+            return clean_FromTuple(schema_, references_, value);
+        case 'Union':
+            return clean_FromUnion(schema_, references_, value);
+        default:
+            return value;
+    }
+}
+/** `[Mutable]` Removes excess properties from a value and returns the result. This function does not check the value and returns an unknown type. You should Check the result before use. Clean is a mutable operation. To avoid mutation, Clone the value first. */
+function Clean(...args) {
+    return args.length === 3 ? clean_Visit(args[0], args[1], args[2]) : clean_Visit(args[0], [], args[1]);
+}
+
+;// CONCATENATED MODULE: ./src/utils/validate-env.ts
+
+
+function validateEnvironment(env, runtime) {
+    const schema = runtime === "worker" ? workerEnvSchema : workflowEnvSchema;
+    let cleanedEnv;
+    try {
+        cleanedEnv = Clean(schema, env);
+    }
+    catch (error) {
+        if (error instanceof Error) {
+            console.error("Error cleaning environment:", error.message);
+            throw new Error(`Invalid environment variables: ${error.message}`);
+        }
+    }
+    if (!Check(schema, cleanedEnv)) {
+        const errors = [...Errors(schema, cleanedEnv)];
+        console.error(errors);
+        throw new Error(`Invalid environment variables: ${errors.map((error) => error.message).join(", ")}`);
+    }
+    return Decode(schema, default_Default(schema, cleanedEnv));
+}
+
 ;// CONCATENATED MODULE: ./src/action.ts
 
 
 
 
-/* harmony default export */ const action = (createActionsPlugin((context) => {
-    return runPlugin(context);
-}, {
-    logLevel: process.env.LOG_LEVEL || LOG_LEVEL.INFO,
-    settingsSchema: pluginSettingsSchema,
-    envSchema: envSchema,
-    ...(process.env.KERNEL_PUBLIC_KEY && { kernelPublicKey: process.env.KERNEL_PUBLIC_KEY }),
-    postCommentOnError: true,
-    bypassSignatureVerification: process.env.NODE_ENV === "local",
-}));
 
-var __webpack_exports__default = __webpack_exports__.A;
-export { __webpack_exports__default as default };
 
-//# sourceMappingURL=index.js.map
+async function runAction() {
+    process.env = validateEnvironment(process.env, "action");
+    try {
+        await createActionsPlugin((context) => {
+            return runSymbiote(context, "action");
+        }, {
+            envSchema: workflowEnvSchema,
+            postCommentOnError: true,
+            settingsSchema: pluginSettingsSchema,
+            logLevel: process.env.LOG_LEVEL ?? LOG_LEVEL.INFO,
+            kernelPublicKey: process.env.KERNEL_PUBLIC_KEY,
+            bypassSignatureVerification: true
+        });
+        process.exit(0);
+    }
+    catch (error) {
+        console.trace(error);
+        console.error("Error creating actions plugin:", error);
+        process.exit(1);
+    }
+}
+runAction().catch((error) => {
+    console.trace(error);
+    process.exit(1);
+});
+

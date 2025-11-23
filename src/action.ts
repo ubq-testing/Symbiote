@@ -1,18 +1,41 @@
 import { createActionsPlugin } from "@ubiquity-os/plugin-sdk";
 import { LOG_LEVEL, LogLevel } from "@ubiquity-os/ubiquity-os-logger";
-import { runPlugin } from "./index";
-import { Env, envSchema, PluginSettings, pluginSettingsSchema, SupportedEvents } from "./types";
+import { runSymbiote } from "./index.ts";
+import { pluginSettingsSchema, PluginSettings, SupportedEvents, Command, SupportedCustomEvents, SupportedWebhookEvents } from "./types/index";
+import { WorkflowEnv, workflowEnvSchema } from "./types/env";
+import { validateEnvironment } from "./utils/validate-env";
 
-export default createActionsPlugin<PluginSettings, Env, null, SupportedEvents>(
-  (context) => {
-    return runPlugin(context);
-  },
-  {
-    logLevel: (process.env.LOG_LEVEL as LogLevel) || LOG_LEVEL.INFO,
-    settingsSchema: pluginSettingsSchema,
-    envSchema: envSchema,
-    ...(process.env.KERNEL_PUBLIC_KEY && { kernelPublicKey: process.env.KERNEL_PUBLIC_KEY }),
-    postCommentOnError: true,
-    bypassSignatureVerification: process.env.NODE_ENV === "local",
-  }
-);
+async function runAction() {
+    process.env = validateEnvironment(process.env as Record<string, string>, "action") as unknown as Record<string, string>;
+
+    try {
+        await createActionsPlugin<
+            PluginSettings,
+            WorkflowEnv,
+            Command,
+            SupportedWebhookEvents & SupportedCustomEvents
+        >(
+            (context) => {
+                return runSymbiote<SupportedEvents, "action">(context, "action")
+            },
+            {
+                envSchema: workflowEnvSchema,
+                postCommentOnError: true,
+                settingsSchema: pluginSettingsSchema,
+                logLevel: (process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO,
+                kernelPublicKey: process.env.KERNEL_PUBLIC_KEY as string,
+                bypassSignatureVerification: true
+            })
+
+        process.exit(0);
+    } catch (error) {
+        console.trace(error);
+        console.error("Error creating actions plugin:", error);
+        process.exit(1);
+    }
+}
+
+runAction().catch((error) => {
+    console.trace(error);
+    process.exit(1);
+});

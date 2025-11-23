@@ -1,16 +1,19 @@
 import { StaticDecode, Type as T } from "@sinclair/typebox";
 
 /**
- * This should contain the properties of the bot config
- * that are required for the plugin to function.
- *
- * The kernel will extract those and pass them to the plugin,
- * which are built into the context object from setup().
+ * Plugin settings for Symbiote automation agent.
  */
 export const pluginSettingsSchema = T.Object(
   {
-    configurableResponse: T.String({ default: "Hello, world!" }),
-    customStringsUrl: T.Optional(T.String()),
+    executionBranch: T.String({
+      minLength: 1,
+      description: "The branch to use for the Symbiote workflow.",
+      default: "development" as const,
+    }),
+    // deploySymbiont: T.Boolean({
+    //   description: "If false, the Symbiote server (see .github/workflows/symbiote-server.yml) will not be deployed. What this means is that the plugin will not attempt to poll for user events and will only be able to handle kernel-forward requests (app install-scoped events)",
+    //   default: true as const,
+    // }),
   },
   { default: {} }
 );
