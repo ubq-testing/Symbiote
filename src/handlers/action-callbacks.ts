@@ -12,11 +12,12 @@ async function handleIssueCommentAction(context: Context<"issue_comment.created"
 
   const response = await fetch(`${WORKER_URL}/callback`, {
     method: "POST",
-    body: JSON.stringify({
-      secret: WORKER_SECRET,
-      event: "issue_comment.created",
-      payload: context.payload
-    })
+    headers: {
+      "X-GitHub-Event": "issue_comment.created",
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${WORKER_SECRET}`
+    },
+    body: JSON.stringify(context.payload)
   });
 
   if (!response.ok) {
@@ -41,11 +42,12 @@ async function handleIssueOpenedAction(context: Context<"issues.opened", "action
 
   const response = await fetch(`${WORKER_URL}/callback`, {
     method: "POST",
-    body: JSON.stringify({
-      secret: WORKER_SECRET,
-      event: "issue_comment.created",
-      payload: context.payload
-    })
+    headers: {
+      "X-GitHub-Event": "issues.opened",
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${WORKER_SECRET}`
+    },
+    body: JSON.stringify(context.payload)
   });
 
   if (!response.ok) {

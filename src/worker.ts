@@ -91,6 +91,14 @@ export default {
       if (typeof validatedEnv === 'object' && 'error' in validatedEnv && validatedEnv.error) {
         return c.json({ message: validatedEnv.error }, 500);
       }
+
+      // Validate the worker secret
+      const authHeader = c.req.header("Authorization");
+      const expectedSecret = validatedEnv.WORKER_SECRET;
+      if (!authHeader || !authHeader.startsWith("Bearer ") || authHeader.slice(7) !== expectedSecret) {
+        return c.json({ message: "Unauthorized" }, 401);
+      }
+
       const body = await c.req.json()
       const event = c.req.header("X-GitHub-Event") as SupportedEvents;
       console.log(`Received callback for event: ${event}`,{
