@@ -80472,11 +80472,12 @@ async function handleIssueCommentAction(context) {
     const { env: { WORKER_URL, WORKER_SECRET } } = context;
     const response = await fetch(`${WORKER_URL}/callback`, {
         method: "POST",
-        body: JSON.stringify({
-            secret: WORKER_SECRET,
-            event: "issue_comment.created",
-            payload: context.payload
-        })
+        headers: {
+            "X-GitHub-Event": "issue_comment.created",
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${WORKER_SECRET}`
+        },
+        body: JSON.stringify(context.payload)
     });
     if (!response.ok) {
         throw new Error(`Failed to send callback to worker: ${response.statusText}`);
@@ -80490,11 +80491,12 @@ async function handleIssueOpenedAction(context) {
     const { env: { WORKER_URL, WORKER_SECRET } } = context;
     const response = await fetch(`${WORKER_URL}/callback`, {
         method: "POST",
-        body: JSON.stringify({
-            secret: WORKER_SECRET,
-            event: "issue_comment.created",
-            payload: context.payload
-        })
+        headers: {
+            "X-GitHub-Event": "issues.opened",
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${WORKER_SECRET}`
+        },
+        body: JSON.stringify(context.payload)
     });
     if (!response.ok) {
         throw new Error(`Failed to send callback to worker: ${response.statusText}`);
