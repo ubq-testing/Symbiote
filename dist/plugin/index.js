@@ -80954,7 +80954,18 @@ function Clean(...args) {
 
 function validateEnvironment(env, runtime) {
     const schema = runtime === "worker" ? workerEnvSchema : workflowEnvSchema;
-    const cleanedEnv = Clean(schema, env);
+    let cleanedEnv;
+    try {
+        cleanedEnv = Clean(schema, env);
+    }
+    catch (error) {
+        if (error instanceof Error) {
+            console.error("Error cleaning environment:", error.message);
+            throw new Error(`Invalid environment variables: ${error.message}`);
+        }
+        console.error("Error cleaning environment:", error);
+    }
+    console.log("Cleaned environment:", cleanedEnv);
     if (!Check(schema, cleanedEnv)) {
         const errors = [...Errors(schema, cleanedEnv)];
         console.error(errors);
@@ -80974,8 +80985,6 @@ function validateEnvironment(env, runtime) {
 async function runAction() {
     const validatedEnv = validateEnvironment(env(process.env), "action");
     process.env = validatedEnv;
-    console.log("Validated environment:", validatedEnv);
-    console.log("Process environment:", process.env);
     return await createActionsPlugin((context) => {
         return runSymbiote(context);
     }, {
