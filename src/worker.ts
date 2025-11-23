@@ -105,7 +105,7 @@ export default {
         body,
         event,
       });
-      // const validatedPayload = validateCallbackPayload<SupportedEvents>({ payload: body, logger, event });
+      // const validatedPayload = validateCallbackPayload<Supporte 200nts>({ payload: body, logger, event });
 
       // if (isErrorGuard(validatedPayload)) {
       //   return c.json({ message: validatedPayload.error }, 500);
