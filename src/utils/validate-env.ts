@@ -12,6 +12,10 @@ export function validateEnvironment(env: Parameters<typeof honoEnv>[0], runtime:
   }catch(error: unknown) {
     if(error instanceof Error) {
       console.error("Error cleaning environment:", error.message);
+      console.log("data", {
+        env,
+        schema,
+      })
       throw new Error(`Invalid environment variables: ${error.message}`);
     }
     console.error("Error cleaning environment:", error);
