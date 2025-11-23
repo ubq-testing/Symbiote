@@ -11,6 +11,12 @@
         "description": "The branch to use for the Symbiote workflow.",
         "default": "development",
         "type": "string"
+      },
+      "test": {
+        "minLength": 1,
+        "description": "A test string.",
+        "default": "test",
+        "type": "string"
       }
     }
   }

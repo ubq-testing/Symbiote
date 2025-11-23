@@ -80795,6 +80795,11 @@ const pluginSettingsSchema = Type.Object({
         description: "The branch to use for the Symbiote workflow.",
         default: "development",
     }),
+    test: Type.String({
+        minLength: 1,
+        description: "A test string.",
+        default: "test",
+    }),
 }, { default: {} });
 
 ;// CONCATENATED MODULE: ./src/types/index.ts
