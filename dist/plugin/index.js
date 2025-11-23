@@ -80990,7 +80990,7 @@ async function runAction() {
     const validatedEnv = validateEnvironment(process.env, "action");
     process.env = validatedEnv;
     try {
-        return await createActionsPlugin((context) => {
+        await createActionsPlugin((context) => {
             return runSymbiote(context, "action");
         }, {
             envSchema: workflowEnvSchema,
@@ -81000,6 +81000,7 @@ async function runAction() {
             kernelPublicKey: process.env.KERNEL_PUBLIC_KEY,
             bypassSignatureVerification: true
         });
+        process.exit(0);
     }
     catch (error) {
         console.trace(error);
