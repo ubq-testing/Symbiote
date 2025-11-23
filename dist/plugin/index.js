@@ -80954,6 +80954,18 @@ function Clean(...args) {
 
 function validateEnvironment(env, runtime) {
     const schema = runtime === "worker" ? workerEnvSchema : workflowEnvSchema;
+    let decodedEnv;
+    try {
+        decodedEnv = Decode(schema, env);
+    }
+    catch (error) {
+        if (error instanceof Error) {
+            console.error("Error decoding environment:", error.message);
+            throw new Error(`Invalid environment variables: ${error.message}`);
+        }
+        console.error("Error decoding environment:", error);
+    }
+    console.log("Decoded environment 1:", decodedEnv);
     let cleanedEnv;
     try {
         cleanedEnv = Clean(schema, env);
@@ -80966,12 +80978,23 @@ function validateEnvironment(env, runtime) {
         console.error("Error cleaning environment:", error);
     }
     console.log("Cleaned environment:", cleanedEnv);
-    if (!Check(schema, cleanedEnv)) {
-        const errors = [...Errors(schema, cleanedEnv)];
+    try {
+        decodedEnv = Decode(schema, default_Default(schema, cleanedEnv));
+    }
+    catch (error) {
+        if (error instanceof Error) {
+            console.error("Error decoding environment:", error.message);
+            throw new Error(`Invalid environment variables: ${error.message}`);
+        }
+        console.error("Error decoding environment:", error);
+    }
+    console.log("Decoded environment 2:", decodedEnv);
+    if (!Check(schema, decodedEnv)) {
+        const errors = [...Errors(schema, decodedEnv)];
         console.error(errors);
         throw new Error(`Invalid environment variables: ${errors.map((error) => error.message).join(", ")}`);
     }
-    return Decode(schema, default_Default(schema, cleanedEnv));
+    return decodedEnv;
 }
 
 ;// CONCATENATED MODULE: ./src/action.ts
