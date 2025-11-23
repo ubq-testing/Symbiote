@@ -80768,7 +80768,7 @@ const sharedSchema = Type.Object({
     NODE_ENV: Type.Optional(Type.Enum(NODE_ENV, { default: NODE_ENV.DEVELOPMENT })),
 });
 const workerEnvSchema = sharedSchema;
-const workflowEnvSchema = Type.Intersect([sharedSchema, Type.Object({
+const workflowEnvSchema = Type.Composite([sharedSchema, Type.Object({
         SYMBIOTE_HOST_PAT: Type.String({
             minLength: 1,
             description: "A GitHub personal access token belonging to the SYMBIOTE_HOST_USERNAME.",
@@ -80956,7 +80956,7 @@ function validateEnvironment(env, runtime) {
     const schema = runtime === "worker" ? workerEnvSchema : workflowEnvSchema;
     let cleanedEnv;
     try {
-        cleanedEnv = Clean(schema, Decode(schema, default_Default(schema, cleanedEnv)));
+        cleanedEnv = Clean(schema, env);
     }
     catch (error) {
         if (error instanceof Error) {
