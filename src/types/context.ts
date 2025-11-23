@@ -2,8 +2,7 @@ import { CommentHandler, Context as PluginContext } from "@ubiquity-os/plugin-sd
 import { PluginSettings } from "./plugin-input";
 import { WorkerEnv, WorkflowEnv } from "./env";
 import { EmitterWebhookEvent, EmitterWebhookEventName } from "@octokit/webhooks";
-import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
-import { Logs } from "@ubiquity-os/ubiquity-os-logger";
+import { customOctokit} from "@ubiquity-os/plugin-sdk/octokit";
 import { customEventSchemas, CustomEventSchemas } from "./custom-event-schemas";
 
 export type SupportedCustomEvents = "server.register";
@@ -26,7 +25,7 @@ export interface CustomContext<
     octokit: InstanceType<typeof customOctokit>;
     config: TConfig;
     env: TEnv;
-    logger: Logs;
+    logger: PluginContext["logger"];
     commentHandler: CommentHandler;
 }
 
