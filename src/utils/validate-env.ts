@@ -6,21 +6,9 @@ import { StaticDecode } from "@sinclair/typebox";
 
 export function validateEnvironment(env: Parameters<typeof honoEnv>[0], runtime: SymbioteRuntime) {
   const schema = runtime === "worker" ? workerEnvSchema : workflowEnvSchema;
-  let decodedEnv: StaticDecode<typeof schema> | undefined;
-  try {
-    decodedEnv = Value.Decode(schema, env) as StaticDecode<typeof schema>;
-  }catch(error: unknown) {
-    if(error instanceof Error) {
-      console.error("Error decoding environment:", error.message);
-      throw new Error(`Invalid environment variables: ${error.message}`);
-    }
-    console.error("Error decoding environment:", error);
-  }
-  console.log("Decoded environment 1:", decodedEnv);
-
   let cleanedEnv: StaticDecode<typeof schema> | undefined;
   try {
-    cleanedEnv = Value.Clean(schema, env) as StaticDecode<typeof schema>;
+    cleanedEnv = Value.Clean(schema, Value.Default(schema, env)) as StaticDecode<typeof schema>;
   }catch(error: unknown) {
     if(error instanceof Error) {
       console.error("Error cleaning environment:", error.message);
@@ -30,22 +18,11 @@ export function validateEnvironment(env: Parameters<typeof honoEnv>[0], runtime:
   }
   console.log("Cleaned environment:", cleanedEnv);
 
-  try {
-    decodedEnv = Value.Decode(schema, Value.Default(schema, cleanedEnv)) as StaticDecode<typeof schema>;
-  }catch(error: unknown) {
-    if(error instanceof Error) {
-      console.error("Error decoding environment:", error.message);
-      throw new Error(`Invalid environment variables: ${error.message}`);
-    }
-    console.error("Error decoding environment:", error);
-  }
-  console.log("Decoded environment 2:", decodedEnv);
-
-  if (!Value.Check(schema, decodedEnv)) {
-    const errors = [...Value.Errors(schema, decodedEnv)];
+  if (!Value.Check(schema, cleanedEnv)) {
+    const errors = [...Value.Errors(schema, cleanedEnv)];
     console.error(errors);
     throw new Error(`Invalid environment variables: ${errors.map((error) => error.message).join(", ")}`);
   }
 
-  return decodedEnv;
+  return Value.Decode(schema, Value.Default(schema, cleanedEnv));
 }
