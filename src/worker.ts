@@ -3,7 +3,7 @@ import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
 import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { ExecutionContext } from "hono";
 import manifest from "../manifest.json" with { type: "json" };
-import { runSymbiote } from "./index";
+import { runSymbiote } from "./index.ts";
 import { workerEnvSchema, pluginSettingsSchema, PluginSettings, SupportedEvents, Command, SupportedCustomEvents, Context, SupportedWebhookEvents } from "./types";
 import { WorkerEnv } from "./types/env";
 import { Value } from "@sinclair/typebox/value";
