@@ -6,8 +6,7 @@ import { WorkflowEnv, workflowEnvSchema } from "./types/env";
 import { validateEnvironment } from "./utils/validate-env";
 
 async function runAction() {
-    const validatedEnv = validateEnvironment(process.env as Record<string, string>, "action") as WorkflowEnv;
-    process.env = validatedEnv as unknown as Record<string, string>;
+    process.env = validateEnvironment(process.env as Record<string, string>, "action") as unknown as Record<string, string>;
 
     try {
         await createActionsPlugin<

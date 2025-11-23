@@ -59,6 +59,7 @@ export default {
       } as unknown as Parameters<typeof honoEnv>[0]),
       "worker"
     );
+
     const honoApp = createPlugin<
       PluginSettings,
       WorkerEnv,
@@ -92,17 +93,21 @@ export default {
       }
       const body = await c.req.json()
       const event = c.req.header("X-GitHub-Event") as SupportedEvents;
-      const validatedPayload = validateCallbackPayload<SupportedEvents>({ payload: body, logger, event });
+      console.log(`Received callback for event: ${event}`,{
+        body,
+        event,
+      });
+      // const validatedPayload = validateCallbackPayload<SupportedEvents>({ payload: body, logger, event });
 
-      if (isErrorGuard(validatedPayload)) {
-        return c.json({ message: validatedPayload.error }, 500);
-      }
+      // if (isErrorGuard(validatedPayload)) {
+      //   return c.json({ message: validatedPayload.error }, 500);
+      // }
 
       /**
        * TODO: Use KV to store the session ID and workflow run ID
        */
 
-      return c.json({ message: "Callback received" });
+      return c.json({ message: "Callback received" }, 200);
     });
 
     return honoApp.fetch(request, env, executionCtx);
