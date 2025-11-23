@@ -4,8 +4,6 @@ import { runSymbiote } from "./index";
 import { pluginSettingsSchema, PluginSettings, SupportedEvents, Command, SupportedCustomEvents, SupportedWebhookEvents } from "./types";
 import { WorkflowEnv, workflowEnvSchema } from "./types/env";
 import { validateEnvironment } from "./utils/validate-env";
-import { env as honoEnv } from "hono/adapter";
-
 
 async function runAction() {
     const validatedEnv = validateEnvironment(process.env as Record<string, string>, "action") as WorkflowEnv;
