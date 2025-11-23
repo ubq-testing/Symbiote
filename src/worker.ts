@@ -59,8 +59,12 @@ function isErrorGuard(value: unknown): value is { error: string } {
 export default {
   async fetch(request: Request, env: WorkerEnv, executionCtx?: ExecutionContext) {
     const logger = createLogger(env.LOG_LEVEL ?? LOG_LEVEL.INFO);
+    const clonedRequest = request.clone();
     const validatedEnv = validateEnvironment(
-      honoEnv(request as unknown as Parameters<typeof honoEnv>[0])
+      honoEnv({
+        ...(executionCtx ?? {}),
+        ...env,
+      } as unknown as Parameters<typeof honoEnv>[0])
     );
     const honoApp = createPlugin<
       PluginSettings,
@@ -73,7 +77,7 @@ export default {
           {
             ...context,
             env: validatedEnv,
-            request: request.clone(),
+            request: clonedRequest,
           }
         );
       },

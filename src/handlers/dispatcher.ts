@@ -2,6 +2,13 @@ import { Context, SupportedEvents } from "../types";
 import { PluginInputs } from "../types/callbacks";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { CallbackResult } from "../types/callbacks";
+import { brotliCompressSync } from "node:zlib";
+
+function compressString(str: string): string {
+  const input = Buffer.from(str, "utf8");
+  const compressed = brotliCompressSync(input);
+  return Buffer.from(compressed).toString("base64");
+}
 
 export async function dispatcher(context: Context<SupportedEvents, "worker">, workflowId = "compute.yml"): Promise<CallbackResult> {
   const result = await workflowDispatch(context, workflowId);
@@ -23,17 +30,21 @@ async function workflowDispatch<T extends SupportedEvents = SupportedEvents>(con
     const octokit = new customOctokit({
         auth: payload.authToken,
     });
-    Reflect.deleteProperty(payload, "signature");
+    const { owner, repo } = context.env.SYMBIOTE_HOST.FORKED_REPO;
+
+    if(!owner || !repo) {
+      throw new Error("Invalid SYMBIOTE_HOST.FORKED_REPO");
+    }
 
   return await octokit.rest.actions.createWorkflowDispatch({
-    owner: context.env.SYMBIOTE_HOST.USERNAME,  
-    repo: context.env.SYMBIOTE_HOST.FORKED_REPO.owner,
+    owner: context.env.SYMBIOTE_HOST.FORKED_REPO.owner,
+    repo: context.env.SYMBIOTE_HOST.FORKED_REPO.repo,
     workflow_id: workflowId,
     ref: context.config.executionBranch,
     inputs: {
       ...payload,
-      eventPayload: JSON.stringify(context.payload),
+      eventPayload: compressString(JSON.stringify(context.payload)),
       settings: JSON.stringify(context.config),
-    },  
+    },
   });
 }

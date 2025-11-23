@@ -1,4 +1,5 @@
 import { StaticDecode, Type as T } from "@sinclair/typebox";
+import { Value } from "@sinclair/typebox/value";
 import { LOG_LEVEL } from "@ubiquity-os/ubiquity-os-logger";
 
 const symbioteHostSchema = T.Object({
@@ -8,15 +9,39 @@ const symbioteHostSchema = T.Object({
     description: "The GitHub login of the host user (user.login not user.name).",
     pattern: "^[a-zA-Z0-9_-]+$",
   }),
-  FORKED_REPO: T.Transform(T.String({
-    minLength: 1,
-    examples: ["keyrxng/Symbiote"],
-    description: "The name of the repository where the host forked the Symbiote repository to host the bot",
-    pattern: "^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$",
-  })).Decode((value) => {
-    const [owner, repo] = value.split("/");
-    return { owner, repo };
-  }).Encode((value) => `${value.owner}/${value.repo}`),
+  FORKED_REPO: T.Transform(
+    T.Union([
+      T.String(),
+      T.Object({
+        owner: T.String({
+          minLength: 1,
+          examples: ["keyrxng"],
+          description: "The owner of the repository where the host forked the Symbiote repository to host the bot",
+          pattern: "^[a-zA-Z0-9_-]+$",
+        }),
+        repo: T.String({
+          minLength: 1,
+          examples: ["ubq-testing/Symbiote"],
+          description: "The name of the repository where the host forked the Symbiote repository to host the bot",
+          pattern: "^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$",
+        })
+      }),
+    ]))
+    .Decode((value) => {
+      if (typeof value === "string") {
+        const [owner, repo] = value.split("/");
+        if (!owner || !repo) {
+          throw new Error("Undefined SYMBIOTE_HOST.FORKED_REPO");
+        }
+        return { owner, repo };
+      }
+      return value;
+    }).Encode((value) => {
+      if (!value.owner || !value.repo) {
+        throw new Error("Invalid SYMBIOTE_HOST.FORKED_REPO");
+      }
+      return `${value.owner}/${value.repo}`;
+    }),
 });
 
 const NODE_ENV = {
@@ -28,9 +53,13 @@ const NODE_ENV = {
 const sharedSchema = T.Object({
   SYMBIOTE_HOST: T.Transform(T.Union([symbioteHostSchema, T.String()]))
     .Decode((value) => {
-      if(typeof value === "string") {
+      if (typeof value === "string") {
         try {
-          return JSON.parse(value) as StaticDecode<typeof symbioteHostSchema>;
+          const parsed = JSON.parse(value) as StaticDecode<typeof symbioteHostSchema>;
+          if(!Value.Check(symbioteHostSchema, parsed)) {
+            throw new Error("Invalid SYMBIOTE_HOST");
+          }
+          return Value.Decode(symbioteHostSchema, Value.Default(symbioteHostSchema, parsed));
         } catch (error) {
           throw new Error("Invalid SYMBIOTE_HOST");
         }
@@ -55,7 +84,7 @@ export const workerEnvSchema = sharedSchema;
 export type WorkerEnv = StaticDecode<typeof workerEnvSchema>;
 
 export const workflowEnvSchema = T.Intersect([sharedSchema, T.Object({
-  GITHUB_PAT: T.String({
+  SYMBIOTE_HOST_PAT: T.String({
     minLength: 1,
     description: "A GitHub personal access token belonging to the SYMBIOTE_HOST_USERNAME.",
   }),
