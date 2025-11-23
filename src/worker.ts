@@ -4,7 +4,7 @@ import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { ExecutionContext } from "hono";
 import manifest from "../manifest.json" with { type: "json" };
 import { runSymbiote } from "./index";
-import { workerEnvSchema, pluginSettingsSchema, PluginSettings, SupportedEvents, Command, SupportedCustomEvents, Context } from "./types";
+import { workerEnvSchema, pluginSettingsSchema, PluginSettings, SupportedEvents, Command, SupportedCustomEvents, Context, SupportedWebhookEvents } from "./types";
 import { WorkerEnv } from "./types/env";
 import { Value } from "@sinclair/typebox/value";
 import { CustomEventSchemas, customEventSchemas } from "./types/custom-event-schemas";
@@ -63,18 +63,18 @@ export default {
       honoEnv(request as unknown as Parameters<typeof honoEnv>[0])
     );
     const honoApp = createPlugin<
-      PluginSettings, 
-      WorkerEnv, 
-      Command, 
-      Exclude<SupportedEvents, SupportedCustomEvents>
-      >(
+      PluginSettings,
+      WorkerEnv,
+      Command,
+      SupportedWebhookEvents & SupportedCustomEvents
+    >(
       (context) => {
         return runSymbiote<SupportedEvents, "worker">(
           {
             ...context,
             env: validatedEnv,
             request: request.clone(),
-          } as Context<Exclude<SupportedEvents, SupportedCustomEvents>, "worker">
+          }
         );
       },
       manifest as Manifest,

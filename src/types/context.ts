@@ -7,7 +7,8 @@ import { Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { customEventSchemas, CustomEventSchemas } from "./custom-event-schemas";
 
 export type SupportedCustomEvents = "server.register";
-export type SupportedEvents = "issue_comment.created" | "issues.opened" | "pull_request.opened" | SupportedCustomEvents;
+export type SupportedWebhookEvents = "issue_comment.created" | "issues.opened" | "pull_request.opened";
+export type SupportedEvents = SupportedWebhookEvents | SupportedCustomEvents;
 export type Command = {
     action: "server.spawn" | "server.restart" | "server.stop";
 }
@@ -44,7 +45,7 @@ export type Context<
     (
         TRuntime extends "worker" ?
         // if the event is a supported GitHub webhook event, return the standard plugin context
-        TEvents extends EmitterWebhookEventName ? PluginContext<PluginSettings, WorkerEnv, Command, TEvents> :
+        TEvents extends EmitterWebhookEventName ? CustomContext<PluginSettings, WorkerEnv, Command, TEvents> :
         // if the event is a custom event, return the custom context
         TEvents extends SupportedCustomEvents ? CustomContext<PluginSettings, WorkerEnv, Command, TEvents> :
         // any other event is not supported
@@ -52,7 +53,7 @@ export type Context<
         :
         TRuntime extends "action" ?
         // if the event is a supported GitHub webhook event, return the standard plugin context
-        TEvents extends EmitterWebhookEventName ? PluginContext<PluginSettings, WorkflowEnv, Command, TEvents> :
+        TEvents extends EmitterWebhookEventName ? CustomContext<PluginSettings, WorkflowEnv, Command, TEvents> :
         // if the event is a custom event, return the custom context
         TEvents extends SupportedCustomEvents ? CustomContext<PluginSettings, WorkflowEnv, Command, TEvents> :
         // any other event is not supported

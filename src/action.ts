@@ -1,12 +1,17 @@
-import { createActionsPlugin } from "@ubiquity-os/plugin-sdk";
+import { Context, createActionsPlugin } from "@ubiquity-os/plugin-sdk";
 import { LOG_LEVEL, LogLevel } from "@ubiquity-os/ubiquity-os-logger";
 import { runSymbiote } from "./index";
-import { pluginSettingsSchema, PluginSettings, SupportedEvents, Command } from "./types";
+import { pluginSettingsSchema, PluginSettings, SupportedEvents, Command, SupportedCustomEvents, CustomContext, SupportedWebhookEvents } from "./types";
 import { WorkflowEnv, workflowEnvSchema } from "./types/env";
 
-createActionsPlugin<PluginSettings, WorkflowEnv, Command, SupportedEvents>(
+createActionsPlugin<
+    PluginSettings,
+    WorkflowEnv, 
+    Command, 
+    SupportedWebhookEvents & SupportedCustomEvents
+    >(
     (context) => {
-        return runSymbiote<SupportedEvents, "action">(context);
+        return runSymbiote<SupportedEvents, "action">(context)
     },
     {
         envSchema: workflowEnvSchema,
