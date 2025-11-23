@@ -7,7 +7,7 @@ import { customEventSchemas, CustomEventSchemas } from "./custom-event-schemas";
 import { Command } from "./command";
 import { PluginInputs } from "./callbacks";
 
-export type SupportedCustomEvents = "server.register";
+export type SupportedCustomEvents = "server.start" | "server.restart" | "server.stop";
 export type SupportedWebhookEvents = "issue_comment.created" | "issues.opened" | "pull_request.opened";
 export type SupportedEvents = SupportedWebhookEvents | SupportedCustomEvents;
 
