@@ -52,5 +52,7 @@ jobs:
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
           APP_ID: ${{ secrets.APP_ID }}
           SYMBIOTE_HOST: ${{ secrets.SYMBIOTE_HOST }}
+          SYMBIOTE_HOST_PAT: ${{ secrets.SYMBIOTE_HOST_PAT }}
           WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
+          WORKER_URL: ${{ secrets.WORKER_URL }}
           NODE_ENV: ${{ secrets.NODE_ENV }}
