@@ -6,6 +6,17 @@ import { env as honoEnv } from "hono/adapter";
 export function validateEnvironment(env: Parameters<typeof honoEnv>[0], runtime: SymbioteRuntime) {
   const schema = runtime === "worker" ? workerEnvSchema : workflowEnvSchema;
   const cleanedEnv = Value.Clean(schema, env);
+  console.log("Cleaned environment:", cleanedEnv);
+
+  if(runtime === "action") {
+    try {
+      console.log("Process environment:", Deno.env.toObject());
+    }catch(error) {
+      console.error("Error getting process environment:", error);
+    }
+  }
+
+
   if (!Value.Check(schema, cleanedEnv)) {
     const errors = [...Value.Errors(schema, cleanedEnv)];
     console.error(errors);
