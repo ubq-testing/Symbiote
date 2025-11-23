@@ -80710,9 +80710,9 @@ const symbioteHostSchema = Type.Object({
             }),
             repo: Type.String({
                 minLength: 1,
-                examples: ["ubq-testing/Symbiote"],
+                examples: ["Symbiote"],
                 description: "The name of the repository where the host forked the Symbiote repository to host the bot",
-                pattern: "^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$",
+                pattern: "^[a-zA-Z0-9_-]+$",
             })
         }),
     ]))
