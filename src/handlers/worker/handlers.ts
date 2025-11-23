@@ -2,8 +2,8 @@ import { CallbackResult } from "../../types/callbacks";
 import { Context } from "../../types/context";
 
 export async function handleIssueComment(context: Context<"issue_comment.created", "worker">): Promise<CallbackResult> {
-    const { logger, commentHandler,  payload :{ comment} } = context;
-  
+    const { logger, commentHandler,  payload: { comment } } = context;
+    
     if (/@keyrxng/gi.test(comment.body ?? "") && comment.user?.login?.toLowerCase() === "keyrxng") {
       logger.ok("Symbiote command received!");
     }

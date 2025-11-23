@@ -21,7 +21,7 @@ export interface CustomContext<
 > {
     eventName: TSupportedEvents;
     payload: TSupportedEvents extends keyof typeof customEventSchemas ? CustomEventSchemas<TSupportedEvents> :
-    TSupportedEvents extends EmitterWebhookEventName ? EmitterWebhookEvent<TSupportedEvents> : never;
+    TSupportedEvents extends EmitterWebhookEventName ? EmitterWebhookEvent<TSupportedEvents>["payload"] : never;
     command: TCommand | null;
     octokit: InstanceType<typeof customOctokit>;
     config: TConfig;
