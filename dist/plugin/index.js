@@ -80956,7 +80956,7 @@ function validateEnvironment(env, runtime) {
     const schema = runtime === "worker" ? workerEnvSchema : workflowEnvSchema;
     let cleanedEnv;
     try {
-        cleanedEnv = Clean(schema, default_Default(schema, env));
+        cleanedEnv = Clean(schema, Decode(schema, default_Default(schema, cleanedEnv)));
     }
     catch (error) {
         if (error instanceof Error) {
