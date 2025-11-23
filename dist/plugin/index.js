@@ -80970,8 +80970,9 @@ function validateEnvironment(env, runtime) {
 
 
 
+
 async function runAction() {
-    const validatedEnv = validateEnvironment(process.env, "action");
+    const validatedEnv = validateEnvironment(env(process.env), "action");
     process.env = validatedEnv;
     return await createActionsPlugin((context) => {
         return runSymbiote(context);
