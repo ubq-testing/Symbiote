@@ -3,6 +3,38 @@ name: Symbiote Server
 on:
   workflow_dispatch:
     inputs:
+      stateId:
+        description: "State Id"
+        required: true
+        type: string
+      eventName:
+        description: "Event Name"
+        required: true
+        type: string
+      eventPayload:
+        description: "Event Payload"
+        required: true
+        type: string
+      settings:
+        description: "Settings"
+        required: true
+        type: string
+      authToken:
+        description: "Auth Token"
+        required: true
+        type: string
+      ref:
+        description: "Ref"
+        required: true
+        type: string
+      signature:
+        description: "The kernel signature"
+        required: true
+        type: string
+      command:
+        description: "Command"
+        required: true
+        type: string
       session_id:
         description: 'Session ID for this workflow instance'
         required: true

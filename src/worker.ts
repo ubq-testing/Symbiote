@@ -11,6 +11,7 @@ import { Value } from "@sinclair/typebox/value";
 import { CustomEventSchemas, customEventSchemas } from "./types/custom-event-schemas";
 import { env as honoEnv } from "hono/adapter";
 import { validateEnvironment } from "./utils/validate-env";
+import { PluginInputs } from "./types/callbacks.ts";
 
 function createLogger(logLevel: LogLevel) {
   return new Logs(logLevel);
@@ -67,12 +68,13 @@ export default {
       Command,
       SupportedWebhookEvents & SupportedCustomEvents
     >(
-      (context) => {
+      async (context) => {
         return runSymbiote<SupportedEvents, "worker">(
           {
             ...context,
             env: validatedEnv,
             request: clonedRequest,
+            pluginInputs: (await clonedRequest.json()) as PluginInputs,
           },
           "worker"
         );

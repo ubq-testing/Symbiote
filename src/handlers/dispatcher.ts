@@ -28,10 +28,10 @@ async function workflowDispatch<T extends SupportedEvents = SupportedEvents>(con
     if (!context.request) {
         throw new Error("Request object not available - dispatcher should only be called in worker runtime");
     }
-    const payload = (await context.request.json()) as PluginInputs; // required cast
-
+    const { pluginInputs } = context;
+    
     const octokit = new customOctokit({
-        auth: payload.authToken,
+        auth: pluginInputs.authToken,
     });
     const { owner, repo } = context.env.SYMBIOTE_HOST.FORKED_REPO;
 
@@ -45,7 +45,7 @@ async function workflowDispatch<T extends SupportedEvents = SupportedEvents>(con
     workflow_id: workflowId,
     ref: context.config.executionBranch,
     inputs: {
-      ...payload,
+      ...pluginInputs,
       eventPayload: compressString(JSON.stringify(context.payload)),
       settings: JSON.stringify(context.config),
     },
