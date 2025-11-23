@@ -5,6 +5,13 @@
   "configuration": {
     "default": {},
     "type": "object",
-    "properties": {}
+    "properties": {
+      "executionBranch": {
+        "default": "development",
+        "description": "The branch to use for the Symbiote workflow.",
+        "examples": ["development", "main"],
+        "type": "string"
+      }
+    }
   }
 }

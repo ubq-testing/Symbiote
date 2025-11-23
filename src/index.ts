@@ -5,8 +5,6 @@ import { isActionRuntimeCtx, isEdgeRuntimeCtx } from "./types/typeguards";
 import { CallbackResult, HandlerCallbacks } from "./types/callbacks";
 import { actionCallbacks } from "./handlers/action-callbacks";
 import { handleCommand } from "./handlers/commands/command-handler";
-import { customEventSchemas } from "./types/custom-event-schemas";
-import { eventNames } from "process";
 
 /**
  * The main plugin function. Split for easier testing.
@@ -15,7 +13,7 @@ export async function runSymbiote<
   T extends SupportedEvents = SupportedEvents,
   TRuntime extends SymbioteRuntime = SymbioteRuntime
 >(context: Context<T, TRuntime>) {
-  const { logger, eventName, command = null } = context;
+  const { logger, command = null } = context;
   const runtime = getRuntimeKey();
   let callbackResults: CallbackResult[] = [];
 
@@ -41,19 +39,18 @@ export async function runSymbiote<
     }
 
     callbackResults = results;
+  } else {
+    throw logger.error(`Unsupported runtime: ${runtime}. Only worker and action runtimes are supported.`);
   }
 
-  if (!callbackResults.length) {
-    logger.error(`No callbacks found for event: ${eventName}`);
-    return { status: 404, reason: "No callbacks found" };
-  }
-
-  for (const callback of callbackResults) {
-    if (callback.status !== 200) {
-      logger.error(`Error in callback: ${callback.reason}`);
-      return { status: callback.status, reason: callback.reason };
-    } else {
-      logger.ok(`Callback successful: ${callback.reason}`);
+  if (callbackResults.length) {
+    for (const callback of callbackResults) {
+      if (callback.status !== 200) {
+        logger.error(`Error in callback: ${callback.reason}`);
+        return { status: callback.status, reason: callback.reason };
+      } else {
+        logger.ok(`Callback successful: ${callback.reason}`);
+      }
     }
   }
 
@@ -61,8 +58,8 @@ export async function runSymbiote<
 }
 
 async function handleCallbacks<
-T extends SupportedEvents = SupportedEvents, 
-TRuntime extends SymbioteRuntime = SymbioteRuntime
+  T extends SupportedEvents = SupportedEvents,
+  TRuntime extends SymbioteRuntime = SymbioteRuntime
 >(
   context: Context<T, TRuntime>,
   callbacks: HandlerCallbacks<T, TRuntime>

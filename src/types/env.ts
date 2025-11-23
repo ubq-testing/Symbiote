@@ -19,8 +19,27 @@ const symbioteHostSchema = T.Object({
   }).Encode((value) => `${value.owner}/${value.repo}`),
 });
 
+const NODE_ENV = {
+  DEVELOPMENT: "development",
+  PRODUCTION: "production",
+  LOCAL: "local",
+} as const;
+
 const sharedSchema = T.Object({
-  SYMBIOTE_HOST: symbioteHostSchema,
+  SYMBIOTE_HOST: T.Transform(T.Union([symbioteHostSchema, T.String()]))
+    .Decode((value) => {
+      if(typeof value === "string") {
+        try {
+          return JSON.parse(value) as StaticDecode<typeof symbioteHostSchema>;
+        } catch (error) {
+          throw new Error("Invalid SYMBIOTE_HOST");
+        }
+      }
+      return value;
+    })
+    .Encode((value) => {
+      return JSON.stringify(value);
+    }),
   APP_ID: T.String({ minLength: 1 }),
   APP_PRIVATE_KEY: T.String({ minLength: 1 }),
   KERNEL_PUBLIC_KEY: T.Optional(T.String()),
@@ -29,11 +48,10 @@ const sharedSchema = T.Object({
     minLength: 1,
     description: "A shared secret between the worker and the action."
   }),
+  NODE_ENV: T.Optional(T.Enum(NODE_ENV, { default: NODE_ENV.DEVELOPMENT })),
 });
 
-export const workerEnvSchema = T.Intersect([sharedSchema, T.Object({
-  // maybe
-})]);
+export const workerEnvSchema = sharedSchema;
 export type WorkerEnv = StaticDecode<typeof workerEnvSchema>;
 
 export const workflowEnvSchema = T.Intersect([sharedSchema, T.Object({

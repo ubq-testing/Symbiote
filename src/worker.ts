@@ -8,22 +8,20 @@ import { workerEnvSchema, pluginSettingsSchema, PluginSettings, SupportedEvents,
 import { WorkerEnv } from "./types/env";
 import { Value } from "@sinclair/typebox/value";
 import { CustomEventSchemas, customEventSchemas } from "./types/custom-event-schemas";
+import { env as honoEnv } from "hono/adapter";
 
 function createLogger(logLevel: LogLevel) {
   return new Logs(logLevel);
 }
 
-function validateEnvironment(env: WorkerEnv, logger: Logs): { error?: string } | WorkerEnv {
+function validateEnvironment(env: WorkerEnv) {
   const cleanedEnv = Value.Clean(workerEnvSchema, env);
   if (!Value.Check(workerEnvSchema, cleanedEnv)) {
     const errors = [...Value.Errors(workerEnvSchema, cleanedEnv)];
-    logger.error(`Invalid environment variables: ${errors.map((error) => error.message).join(", ")}`);
-    return {
-      error: errors.map((error) => error.message).join(", "),
-    };
+    throw new Error(`Invalid environment variables: ${errors.map((error) => error.message).join(", ")}`);
   }
 
-  return Value.Decode(workerEnvSchema, Value.Default(workerEnvSchema, env));
+  return Value.Decode(workerEnvSchema, Value.Default(workerEnvSchema, cleanedEnv));
 }
 
 function isCustomEventGuard<T extends SupportedEvents = SupportedEvents>(event: T): event is T {
@@ -55,18 +53,26 @@ function validateCallbackPayload<T extends SupportedEvents = SupportedEvents>({
 }
 
 function isErrorGuard(value: unknown): value is { error: string } {
-  return typeof value === 'object' && value !== null && 'error' in value;
+  return typeof value === "object" && value !== null && "error" in value && typeof value.error === "string";
 }
-
 
 export default {
   async fetch(request: Request, env: WorkerEnv, executionCtx?: ExecutionContext) {
-    const logger = createLogger(env.LOG_LEVEL as LogLevel);
-    const honoApp = createPlugin<PluginSettings, WorkerEnv, Command, Exclude<SupportedEvents, SupportedCustomEvents>>(
+    const logger = createLogger(env.LOG_LEVEL ?? LOG_LEVEL.INFO);
+    const validatedEnv = validateEnvironment(
+      honoEnv(request as unknown as Parameters<typeof honoEnv>[0])
+    );
+    const honoApp = createPlugin<
+      PluginSettings, 
+      WorkerEnv, 
+      Command, 
+      Exclude<SupportedEvents, SupportedCustomEvents>
+      >(
       (context) => {
         return runSymbiote<SupportedEvents, "worker">(
           {
             ...context,
+            env: validatedEnv,
             request: request.clone(),
           } as Context<Exclude<SupportedEvents, SupportedCustomEvents>, "worker">
         );
@@ -83,7 +89,6 @@ export default {
     );
 
     honoApp.post("/callback", async (c) => {
-      const validatedEnv = validateEnvironment(c.env as WorkerEnv, logger);
       if (typeof validatedEnv === 'object' && 'error' in validatedEnv && validatedEnv.error) {
         return c.json({ message: validatedEnv.error }, 500);
       }
@@ -95,18 +100,9 @@ export default {
         return c.json({ message: validatedPayload.error }, 500);
       }
 
-
-
-
-
-
-
-
-
       /**
        * TODO: Use KV to store the session ID and workflow run ID
        */
-
 
       return c.json({ message: "Callback received" });
     });
