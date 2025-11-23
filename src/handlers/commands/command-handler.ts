@@ -1,39 +1,34 @@
-import { Context, SupportedEvents } from "../../types/index";
+import { Command } from "../../types/command";
+import { Context } from "../../types/index";
 import { handleSymbioteServer } from "../worker/symbiote-server";
-
-
-type CommandString = `${string}.${string}`;
-
-function parseCommand({
-    command,
-}: {
-    command?: CommandString,
-}) {
-    if (!command) return;
-    const [action, subAction] = command.split(".");
-    return {
-        action: action as keyof typeof commandHandlers,
-        subAction: subAction as keyof typeof commandHandlers[keyof typeof commandHandlers]
-    }
-}
 
 const commandHandlers = {
     "server": {
-        "spawn": handleSymbioteServer,
+        "start": handleSymbioteServer,
         "restart": handleSymbioteServer,
         "stop": handleSymbioteServer,
     },
 }
 
 export async function handleCommand(context: Context<"issue_comment.created", "worker">) {
-    const { command, logger } = context;
-    const parsedCommand = parseCommand({ command: command?.action });
-    if (!parsedCommand) return;
-    const { action, subAction } = parsedCommand;
-    const handler = commandHandlers[action][subAction];
-    if (!handler) {
-        throw logger.error(`Unknown command action: ${action}.${subAction}`, { command });
+    const { payload: { comment }, logger } = context;
+
+    if (!comment.body.startsWith("/symbiote")) {
+        return { status: 400, reason: "No command provided" };
     }
 
-    return await handler(context);
+    const command = comment.body.replace("/symbiote", "").trim().split(" ");
+
+    if (command.length === 1) {
+        switch (command[0]) {
+            case "start":
+            case "restart":
+            case "stop":
+                return await handleSymbioteServer(context);
+            default:
+                return { status: 400, reason: "Unknown command" };
+        }
+    } else {
+        throw logger.error(`Unknown command: ${command.join(" ")}`);
+    }
 }

@@ -2,10 +2,11 @@ import { Context, SupportedEvents } from "../types/index";
 import { CallbackResult, HandlerCallbacks } from "../types/callbacks";
 import { dispatcher } from "./dispatcher";
 import { handleServerCallback } from "./server/callback";
+import { handleCommand } from "./commands/command-handler";
 
 async function handleIssueCommentWorker(context: Context<"issue_comment.created", "worker">): Promise<CallbackResult> {
-  context.logger.info("Handling issue comment worker");
-  return { status: 200, reason: "Issue comment worker" };
+  await handleCommand(context);
+  return { status: 200, reason: "Command handled" };
 }
 
 export const workerCallbacks = {

@@ -4,8 +4,9 @@ import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { ExecutionContext } from "hono";
 import manifest from "../manifest.json" with { type: "json" };
 import { runSymbiote } from "./index.ts";
-import { workerEnvSchema, pluginSettingsSchema, PluginSettings, SupportedEvents, Command, SupportedCustomEvents, Context, SupportedWebhookEvents } from "./types/index";
+import { workerEnvSchema, pluginSettingsSchema, PluginSettings, SupportedEvents, SupportedCustomEvents, SupportedWebhookEvents } from "./types/index";
 import { WorkerEnv } from "./types/env";
+import { Command } from "./types/command";
 import { Value } from "@sinclair/typebox/value";
 import { CustomEventSchemas, customEventSchemas } from "./types/custom-event-schemas";
 import { env as honoEnv } from "hono/adapter";
@@ -105,6 +106,7 @@ export default {
         body,
         event,
       });
+
       // const validatedPayload = validateCallbackPayload<Supporte 200nts>({ payload: body, logger, event });
 
       // if (isErrorGuard(validatedPayload)) {
@@ -115,7 +117,7 @@ export default {
        * TODO: Use KV to store the session ID and workflow run ID
        */
 
-      return c.json({ message: "Callback received" }, 200);
+      return c.body(JSON.stringify({ message: "Callback received" }), 200);
     });
 
     return honoApp.fetch(request, env, executionCtx);

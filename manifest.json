@@ -2,6 +2,25 @@
   "name": "Symbiote",
   "description": "A proactive GitHub automation agent that responds to configured events and commands.",
   "ubiquity:listeners": ["issue_comment.created", "issues.opened", "pull_request.opened"],
+  "commands":{
+    "symbiote": {
+      "ubiquity:example": "/symbiote",
+      "description": "Manage your Symbiote.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "description": "The actions to perform.",
+            "type": "array",
+            "items": {
+              "description": "The action to perform.",
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  },
   "configuration": {
     "default": {},
     "type": "object",

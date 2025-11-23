@@ -4,13 +4,11 @@ import { WorkerEnv, WorkflowEnv } from "./env";
 import { EmitterWebhookEvent, EmitterWebhookEventName } from "@octokit/webhooks";
 import { customOctokit} from "@ubiquity-os/plugin-sdk/octokit";
 import { customEventSchemas, CustomEventSchemas } from "./custom-event-schemas";
+import { Command } from "./command";
 
 export type SupportedCustomEvents = "server.register";
 export type SupportedWebhookEvents = "issue_comment.created" | "issues.opened" | "pull_request.opened";
 export type SupportedEvents = SupportedWebhookEvents | SupportedCustomEvents;
-export type Command = {
-    action: "server.spawn" | "server.restart" | "server.stop";
-}
 
 export interface CustomContext<
     TConfig = PluginSettings,

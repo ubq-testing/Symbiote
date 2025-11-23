@@ -72,7 +72,7 @@ export class SymbioteServer {
         }
 
         await octokit.rest.actions.cancelWorkflowRun({
-            owner: env.SYMBIOTE_HOST.USERNAME,
+            owner: env.SYMBIOTE_HOST.FORKED_REPO.owner,
             repo: env.SYMBIOTE_HOST.FORKED_REPO.repo,
             workflow_id: this._workflowId,
             run_id: this._currentRunData.id,
@@ -93,8 +93,10 @@ export class SymbioteServer {
     async checkServerDetails() {
         const { env, octokit } = this._context;
 
+        try {
+            
         const response = await octokit.rest.actions.listWorkflowRuns({
-            owner: env.SYMBIOTE_HOST.USERNAME,
+            owner: env.SYMBIOTE_HOST.FORKED_REPO.owner,
             repo: env.SYMBIOTE_HOST.FORKED_REPO.repo,
             workflow_id: this._workflowId,
         });
@@ -102,6 +104,18 @@ export class SymbioteServer {
 
         this._currentRunData = response.data.workflow_runs[0];
         this._serverStatus = this._currentRunData?.status === "in_progress" ? "running" : "stopped";
-    }
+        }catch(error) {
+            if(!(error instanceof Error)) {
+                throw this._context.logger.error(`Error checking server details: ${error}`, { error: new Error(String(error)) });
+            }
 
+            if(error.message.toLowerCase().includes("not found")) {
+                this._serverStatus = "stopped";
+                this._currentRunData = null;
+                return;
+            }
+
+            throw this._context.logger.error(`Error checking server details: ${error}`, { error: error });
+        }
+    }
 }
