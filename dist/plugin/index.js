@@ -80391,6 +80391,12 @@ var octokit_customOctokit = Octokit.plugin(throttling, retry, paginateRest, rest
 
 ;// CONCATENATED MODULE: ./src/handlers/dispatcher.ts
 
+
+function dispatcher_compressString(str) {
+    const input = Buffer.from(str, "utf8");
+    const compressed = (0,external_node_zlib_.brotliCompressSync)(input);
+    return Buffer.from(compressed).toString("base64");
+}
 async function dispatcher(context, workflowId = "compute.yml") {
     const result = await workflowDispatch(context, workflowId);
     if (result.status !== 204) {
@@ -80408,15 +80414,18 @@ async function workflowDispatch(context, workflowId) {
     const octokit = new octokit_customOctokit({
         auth: payload.authToken,
     });
-    Reflect.deleteProperty(payload, "signature");
+    const { owner, repo } = context.env.SYMBIOTE_HOST.FORKED_REPO;
+    if (!owner || !repo) {
+        throw new Error("Invalid SYMBIOTE_HOST.FORKED_REPO");
+    }
     return await octokit.rest.actions.createWorkflowDispatch({
-        owner: context.env.SYMBIOTE_HOST.USERNAME,
-        repo: context.env.SYMBIOTE_HOST.FORKED_REPO.owner,
+        owner: context.env.SYMBIOTE_HOST.FORKED_REPO.owner,
+        repo: context.env.SYMBIOTE_HOST.FORKED_REPO.repo,
         workflow_id: workflowId,
         ref: context.config.executionBranch,
         inputs: {
             ...payload,
-            eventPayload: JSON.stringify(context.payload),
+            eventPayload: dispatcher_compressString(JSON.stringify(context.payload)),
             settings: JSON.stringify(context.config),
         },
     });
@@ -80682,6 +80691,7 @@ async function handleCallbacks(context, callbacks) {
 ;// CONCATENATED MODULE: ./src/types/env.ts
 
 
+
 const symbioteHostSchema = Type.Object({
     USERNAME: Type.String({
         minLength: 1,
@@ -80689,15 +80699,38 @@ const symbioteHostSchema = Type.Object({
         description: "The GitHub login of the host user (user.login not user.name).",
         pattern: "^[a-zA-Z0-9_-]+$",
     }),
-    FORKED_REPO: Type.Transform(Type.String({
-        minLength: 1,
-        examples: ["keyrxng/Symbiote"],
-        description: "The name of the repository where the host forked the Symbiote repository to host the bot",
-        pattern: "^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$",
-    })).Decode((value) => {
-        const [owner, repo] = value.split("/");
-        return { owner, repo };
-    }).Encode((value) => `${value.owner}/${value.repo}`),
+    FORKED_REPO: Type.Transform(Type.Union([
+        Type.String(),
+        Type.Object({
+            owner: Type.String({
+                minLength: 1,
+                examples: ["keyrxng"],
+                description: "The owner of the repository where the host forked the Symbiote repository to host the bot",
+                pattern: "^[a-zA-Z0-9_-]+$",
+            }),
+            repo: Type.String({
+                minLength: 1,
+                examples: ["ubq-testing/Symbiote"],
+                description: "The name of the repository where the host forked the Symbiote repository to host the bot",
+                pattern: "^[a-zA-Z0-9_-]+/[a-zA-Z0-9_-]+$",
+            })
+        }),
+    ]))
+        .Decode((value) => {
+        if (typeof value === "string") {
+            const [owner, repo] = value.split("/");
+            if (!owner || !repo) {
+                throw new Error("Undefined SYMBIOTE_HOST.FORKED_REPO");
+            }
+            return { owner, repo };
+        }
+        return value;
+    }).Encode((value) => {
+        if (!value.owner || !value.repo) {
+            throw new Error("Invalid SYMBIOTE_HOST.FORKED_REPO");
+        }
+        return `${value.owner}/${value.repo}`;
+    }),
 });
 const NODE_ENV = {
     DEVELOPMENT: "development",
@@ -80709,7 +80742,11 @@ const sharedSchema = Type.Object({
         .Decode((value) => {
         if (typeof value === "string") {
             try {
-                return JSON.parse(value);
+                const parsed = JSON.parse(value);
+                if (!Check(symbioteHostSchema, parsed)) {
+                    throw new Error("Invalid SYMBIOTE_HOST");
+                }
+                return Decode(symbioteHostSchema, default_Default(symbioteHostSchema, parsed));
             }
             catch (error) {
                 throw new Error("Invalid SYMBIOTE_HOST");
@@ -80732,7 +80769,7 @@ const sharedSchema = Type.Object({
 });
 const workerEnvSchema = (/* unused pure expression or super */ null && (sharedSchema));
 const workflowEnvSchema = Type.Intersect([sharedSchema, Type.Object({
-        GITHUB_PAT: Type.String({
+        SYMBIOTE_HOST_PAT: Type.String({
             minLength: 1,
             description: "A GitHub personal access token belonging to the SYMBIOTE_HOST_USERNAME.",
         }),
