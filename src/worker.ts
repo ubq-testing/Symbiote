@@ -9,20 +9,12 @@ import { WorkerEnv } from "./types/env";
 import { Value } from "@sinclair/typebox/value";
 import { CustomEventSchemas, customEventSchemas } from "./types/custom-event-schemas";
 import { env as honoEnv } from "hono/adapter";
+import { validateEnvironment } from "./utils/validate-env";
 
 function createLogger(logLevel: LogLevel) {
   return new Logs(logLevel);
 }
 
-function validateEnvironment(env: WorkerEnv) {
-  const cleanedEnv = Value.Clean(workerEnvSchema, env);
-  if (!Value.Check(workerEnvSchema, cleanedEnv)) {
-    const errors = [...Value.Errors(workerEnvSchema, cleanedEnv)];
-    throw new Error(`Invalid environment variables: ${errors.map((error) => error.message).join(", ")}`);
-  }
-
-  return Value.Decode(workerEnvSchema, Value.Default(workerEnvSchema, cleanedEnv));
-}
 
 function isCustomEventGuard<T extends SupportedEvents = SupportedEvents>(event: T): event is T {
   return event in customEventSchemas;
@@ -64,7 +56,8 @@ export default {
       honoEnv({
         ...(executionCtx ?? {}),
         ...env,
-      } as unknown as Parameters<typeof honoEnv>[0])
+      } as unknown as Parameters<typeof honoEnv>[0]),
+      "worker"
     );
     const honoApp = createPlugin<
       PluginSettings,
