@@ -17,6 +17,12 @@ export async function runSymbiote<
   const runtime = getRuntimeKey();
   let callbackResults: CallbackResult[] = [];
 
+  console.log("Confirming runtime", {
+    runtime,
+    isEdgeRuntimeCtx: isEdgeRuntimeCtx<T>(context, runtime),
+    isActionRuntimeCtx: isActionRuntimeCtx<T>(context, runtime),
+  });
+
   if (isEdgeRuntimeCtx<T>(context, runtime)) {
 
     if (command) {
