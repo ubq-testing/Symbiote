@@ -1,8 +1,9 @@
 import { Value } from "@sinclair/typebox/value";
 import { WorkerEnv, workerEnvSchema, WorkflowEnv, workflowEnvSchema } from "../types/env";
 import { SymbioteRuntime } from "../types";
+import { env as honoEnv } from "hono/adapter";
 
-export function validateEnvironment(env: WorkerEnv | WorkflowEnv, runtime: SymbioteRuntime) {
+export function validateEnvironment(env: Parameters<typeof honoEnv>[0], runtime: SymbioteRuntime) {
     const schema = runtime === "worker" ? workerEnvSchema : workflowEnvSchema;
     const cleanedEnv = Value.Clean(schema, env);
     if (!Value.Check(schema, cleanedEnv)) {
