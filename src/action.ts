@@ -1,4 +1,4 @@
-import { Context, createActionsPlugin } from "@ubiquity-os/plugin-sdk";
+import { createActionsPlugin } from "@ubiquity-os/plugin-sdk";
 import { LOG_LEVEL, LogLevel } from "@ubiquity-os/ubiquity-os-logger";
 import { runSymbiote } from "./index";
 import { pluginSettingsSchema, PluginSettings, SupportedEvents, Command, SupportedCustomEvents, SupportedWebhookEvents } from "./types";
@@ -10,7 +10,7 @@ async function runAction() {
     process.env = validatedEnv as unknown as Record<string, string>;
 
     try {
-        return await createActionsPlugin<
+        await createActionsPlugin<
             PluginSettings,
             WorkflowEnv,
             Command,
@@ -27,12 +27,13 @@ async function runAction() {
                 kernelPublicKey: process.env.KERNEL_PUBLIC_KEY as string,
                 bypassSignatureVerification: true
             })
+
+        process.exit(0);
     } catch (error) {
         console.trace(error);
         console.error("Error creating actions plugin:", error);
         process.exit(1);
     }
-
 }
 
 runAction().catch((error) => {
