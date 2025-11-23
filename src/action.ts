@@ -8,10 +8,7 @@ import { env as honoEnv } from "hono/adapter";
 
 
 async function runAction() {
-    const validatedEnv = validateEnvironment(
-        honoEnv(process.env as unknown as Parameters<typeof honoEnv>[0]),
-        "action"
-    ) as WorkflowEnv;
+    const validatedEnv = validateEnvironment(process.env as Record<string, string>, "action") as WorkflowEnv;
     process.env = validatedEnv as unknown as Record<string, string>;
 
     return await createActionsPlugin<

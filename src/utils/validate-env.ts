@@ -4,7 +4,7 @@ import { SymbioteRuntime } from "../types";
 import { env as honoEnv } from "hono/adapter";
 import { StaticDecode } from "@sinclair/typebox";
 
-export function validateEnvironment(env: Parameters<typeof honoEnv>[0], runtime: SymbioteRuntime) {
+export function validateEnvironment(env: Record<string, string>, runtime: SymbioteRuntime) {
   const schema = runtime === "worker" ? workerEnvSchema : workflowEnvSchema;
   let cleanedEnv: StaticDecode<typeof schema> | undefined;
   try {
