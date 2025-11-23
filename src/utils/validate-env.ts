@@ -20,6 +20,7 @@ export function validateEnvironment(env: Parameters<typeof honoEnv>[0], runtime:
     }
     console.error("Error cleaning environment:", error);
   }
+  console.log("Full environment:", env);
   console.log("Cleaned environment:", cleanedEnv);
 
   if (!Value.Check(schema, cleanedEnv)) {
