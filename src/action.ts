@@ -11,7 +11,7 @@ async function runAction() {
     process.env = validateEnvironment(process.env as Record<string, string>, "action") as unknown as Record<string, string>;
 
     const github = await import("@actions/github");
-    const payload = github.context.payload
+    const payload = github.context.payload.inputs;
 
     let eventPayload, settings;
 
@@ -23,9 +23,9 @@ async function runAction() {
     }
 
     try {
-        settings = JSON.parse(decompressString(payload.settings));
+        settings = JSON.parse(payload.settings);
     } catch (error) {
-        console.error("Error decompressing settings:", error);
+        console.error("Error parsing settings:", error);
         process.exit(1);
     }
 
