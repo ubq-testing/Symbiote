@@ -1,8 +1,5 @@
 import { RestEndpointMethodTypes } from "@ubiquity-os/plugin-sdk/octokit";
-import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
-import { WorkflowEnv } from "../types/env";
-import { PluginSettings } from "../types/plugin-input";
-import { Context } from "../types";
+import { Context } from "../types/index";
 
 const MS_PER_HOUR = 60 * 60 * 1000;
 
@@ -18,7 +15,7 @@ export interface RuntimeTracker {
 export function createRuntimeTracker(
   context: Context<"server.start" | "server.restart", "action">,
 ): RuntimeTracker {
-  const { logger, env, appOctokit, hostOctokit, config } = context;
+  const { env, appOctokit, config } = context;
   const runId = context.env.GITHUB_RUN_ID ? parseInt(context.env.GITHUB_RUN_ID, 10) : null;
   const { owner, repo } = env.SYMBIOTE_HOST.FORKED_REPO;
 

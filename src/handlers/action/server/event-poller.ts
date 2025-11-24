@@ -1,20 +1,19 @@
 import { Context } from "../../../types/index";
 import { RestEndpointMethodTypes } from "@ubiquity-os/plugin-sdk/octokit";
+import { createRepoOctokit } from "../../octokit";
 
 export type UserEvent = RestEndpointMethodTypes["activity"]["listPublicEventsForUser"]["response"]["data"][0];
 export type Notification = RestEndpointMethodTypes["activity"]["listNotificationsForAuthenticatedUser"]["response"]["data"][0];
 
-export async function pollUserEvents(
-  {
-    context,
-    username,
-    perPage = 30,
-  }: {
-    context: Context<"server.start" | "server.restart", "action">;
-    username: string;
-    perPage: number;
-  },
-): Promise<{ events: UserEvent[]; notifications: Notification[] }> {
+export async function pollUserEvents({
+  context,
+  username,
+  perPage = 30,
+}: {
+  context: Context<"server.start" | "server.restart", "action">;
+  username: string;
+  perPage: number;
+}): Promise<{ events: UserEvent[]; notifications: Notification[] }> {
   const { appOctokit, hostOctokit, env } = context;
   try {
     const publicEvents = await appOctokit.rest.activity.listPublicEventsForUser({
@@ -85,27 +84,31 @@ export async function determineEventRouting(
 
     const isPrivate = repoResponse.data.private;
 
-    // Check if app is installed on the repository
-    let hasApp = false;
     try {
       // Attempt to get app installation - if this succeeds, app is installed
       const appAuth = await appOctokit.rest.apps.getAuthenticated();
       if (appAuth.data) {
-        console.log(`App authentication: ${appAuth.data.id}`, { appAuth });
+        logger.info(`App authentication: ${appAuth.data.id}`, { appAuth });
+      }
+    } catch (er) {
+      logger.error(`Error checking app authentication: `, { owner, repoName, orgName });
+    }
+
+    // Check if app is installed on the repository
+    let hasApp = false;
+    try {
+      const repoOctokit = await createRepoOctokit({
+        env,
+        owner,
+        repo: repoName,
+      });
+
+      if(repoOctokit) {
+        hasApp = true;
       }
 
-      const installations = await appOctokit.rest.apps.listInstallations();
-      const installation = installations.data.find((installation) => installation.account?.login.toLowerCase() === owner.toLowerCase());
-      if (installation) {
-        console.log(`Installation: ${installation.id}`, { installation });
-      } else {
-        console.log(`No installation found for ${owner}`, { installations });
-      }
-
-      hasApp = installations.data.some((installation) => installation.account?.login.toLowerCase() === owner.toLowerCase());
     } catch (e) {
       logger.error(`Error checking app installation: `, { owner, repoName, orgName });
-      hasApp = false;
     }
     logger.info(`App installation check for ${owner} in ${repoName}: ${hasApp}`);
 
@@ -153,7 +156,6 @@ async function handleRouting({
   }
 }
 
-
 export async function processNotification(context: Context<"server.start" | "server.restart", "action">, notification: Notification): Promise<void> {
   const { logger } = context;
   logger.info(`Processing notification: ${notification.id}`, {
@@ -162,7 +164,6 @@ export async function processNotification(context: Context<"server.start" | "ser
   });
   // TODO: Process notification
 }
-
 
 /**
  * Processes a single GitHub user event
