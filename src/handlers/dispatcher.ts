@@ -73,7 +73,12 @@ async function workflowDispatch<T extends SupportedEvents = SupportedEvents>(
       ref: context.config.executionBranch,
       inputs: {
         ...pluginInputs,
-        // Match plugin.ts pattern: compress eventPayload, stringify settings (no compression)
+        /**
+         * We overwrite the eventName with the action name to ensure the correct callback is triggered
+         * but more than that, we'd need the action server to respond to issue_comment.created but the
+         * worker has already dealt with that, so this ensure a clean separation of responsibilities.
+         */
+        eventName: context.payload.action,
         eventPayload: compressString(JSON.stringify(context.payload)),
         settings: JSON.stringify(context.config),
       },
