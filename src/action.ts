@@ -13,7 +13,7 @@ async function runAction() {
     const github = await import("@actions/github");
     const payload = github.context.payload
 
-    let eventPayload, settings, command;
+    let eventPayload, settings;
 
     try {
         eventPayload = JSON.parse(decompressString(payload.eventPayload));
