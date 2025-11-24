@@ -1,17 +1,42 @@
 import { Context } from "../../../types/index";
-import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { RestEndpointMethodTypes } from "@ubiquity-os/plugin-sdk/octokit";
 
-type UserEvent = RestEndpointMethodTypes["activity"]["listPublicEventsForUser"]["response"]["data"][0];
+export type UserEvent = RestEndpointMethodTypes["activity"]["listPublicEventsForUser"]["response"]["data"][0];
+export type Notification = RestEndpointMethodTypes["activity"]["listNotificationsForAuthenticatedUser"]["response"]["data"][0];
 
-export async function pollUserEvents(octokit: InstanceType<typeof customOctokit>, username: string, perPage: number = 30): Promise<UserEvent[]> {
+export async function pollUserEvents(
+  {
+    context,
+    username,
+    perPage = 30,
+  }: {
+    context: Context<"server.start" | "server.restart", "action">;
+    username: string;
+    perPage: number;
+  },
+): Promise<{ events: UserEvent[]; notifications: Notification[] }> {
+  const { appOctokit, hostOctokit, env } = context;
   try {
-    const response = await octokit.rest.activity.listPublicEventsForUser({
+    const publicEvents = await appOctokit.rest.activity.listPublicEventsForUser({
       username,
       per_page: perPage,
     });
 
-    return response.data;
+    const notifications = await hostOctokit.rest.activity.listNotificationsForAuthenticatedUser({
+      per_page: perPage,
+    });
+
+    const privateEvents = await hostOctokit.rest.activity.listEventsForAuthenticatedUser({
+      per_page: perPage,
+      username,
+    });
+
+    const events = [...publicEvents.data, ...privateEvents.data];
+
+    return {
+      events: events.sort((a, b) => new Date(a.created_at ?? "").getTime() - new Date(b.created_at ?? "").getTime()),
+      notifications: notifications.data.sort((a, b) => new Date(a.updated_at ?? "").getTime() - new Date(b.updated_at ?? "").getTime()),
+    };
   } catch (error) {
     throw new Error(`Failed to poll user events: ${error instanceof Error ? error.message : String(error)}`);
   }
@@ -31,13 +56,13 @@ export async function determineEventRouting(
   context: Context<"server.start" | "server.restart", "action">,
   event: UserEvent
 ): Promise<"kernel-forwarded" | "safe-action" | "unsafe-action"> {
-  const { logger, octokit, env } = context;
+  const { logger, appOctokit, hostOctokit, env } = context;
 
   /**
    * Extract repository information from the event which
    * can be from any org, user, repo, etc.
    */
-  const repo = event.repo;
+  const { repo, org } = event;
   if (!repo) {
     logger.warn(`Event ${event.id} has no repository information, skipping`);
     throw new Error("Event has no repository information");
@@ -49,9 +74,11 @@ export async function determineEventRouting(
     throw new Error(`Invalid repository name: ${repo.name}`);
   }
 
+  const orgName = org?.login;
+
   try {
     // Check if repository is private
-    const repoResponse = await octokit.rest.repos.get({
+    const repoResponse = await appOctokit.rest.repos.get({
       owner,
       repo: repoName,
     });
@@ -62,12 +89,25 @@ export async function determineEventRouting(
     let hasApp = false;
     try {
       // Attempt to get app installation - if this succeeds, app is installed
-      const installations = await octokit.rest.apps.listInstallations();
+      const appAuth = await appOctokit.rest.apps.getAuthenticated();
+      if (appAuth.data) {
+        console.log(`App authentication: ${appAuth.data.id}`, { appAuth });
+      }
+
+      const installations = await appOctokit.rest.apps.listInstallations();
+      const installation = installations.data.find((installation) => installation.account?.login.toLowerCase() === owner.toLowerCase());
+      if (installation) {
+        console.log(`Installation: ${installation.id}`, { installation });
+      } else {
+        console.log(`No installation found for ${owner}`, { installations });
+      }
+
       hasApp = installations.data.some((installation) => installation.account?.login.toLowerCase() === owner.toLowerCase());
     } catch (e) {
-      logger.error(`Error checking app installation: `, { e });
+      logger.error(`Error checking app installation: `, { owner, repoName, orgName });
       hasApp = false;
     }
+    logger.info(`App installation check for ${owner} in ${repoName}: ${hasApp}`);
 
     // Route based on repository type and app installation
     if (hasApp) {
@@ -112,6 +152,17 @@ async function handleRouting({
       break;
   }
 }
+
+
+export async function processNotification(context: Context<"server.start" | "server.restart", "action">, notification: Notification): Promise<void> {
+  const { logger } = context;
+  logger.info(`Processing notification: ${notification.id}`, {
+    notificationId: notification.id,
+    notification,
+  });
+  // TODO: Process notification
+}
+
 
 /**
  * Processes a single GitHub user event
@@ -171,7 +222,7 @@ export async function processEvent(context: Context<"server.start" | "server.res
 async function handleKernelForwardedEvent(context: Context<"server.start" | "server.restart", "action">, event: UserEvent): Promise<void> {
   const { logger } = context;
   logger.info(`[KERNEL-FORWARDED] Handling event ${event.id} from ${event.repo?.name}`, {
-    event
+    event,
   });
   // TODO: Forward event to kernel via existing infrastructure
 }
@@ -183,7 +234,7 @@ async function handleKernelForwardedEvent(context: Context<"server.start" | "ser
 async function handleSafeActionEvent(context: Context<"server.start" | "server.restart", "action">, event: UserEvent): Promise<void> {
   const { logger } = context;
   logger.info(`[SAFE-ACTION] Handling event ${event.id} from ${event.repo?.name}`, {
-    event
+    event,
   });
   // TODO: Use app authentication to handle event
 }
@@ -195,7 +246,7 @@ async function handleSafeActionEvent(context: Context<"server.start" | "server.r
 async function handleUnsafeActionEvent(context: Context<"server.start" | "server.restart", "action">, event: UserEvent): Promise<void> {
   const { logger } = context;
   logger.info(`[UNSAFE-ACTION] Handling event ${event.id} from ${event.repo?.name}`, {
-    event
+    event,
   });
   // TODO: Queue event for main workflow with user PAT authentication
 }

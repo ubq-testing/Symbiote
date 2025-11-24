@@ -23,7 +23,7 @@ export async function handleStopPrerequisites(
 export async function handleServerStopAction(
     context: Context<"server.stop", "action">
   ): Promise<CallbackResult> {
-    const { logger, payload, octokit, env } = context;
+    const { logger, payload } = context;
     const { sessionId, workflowId } = payload.client_payload;
     logger.info(`Handling server stop in action context`);
   

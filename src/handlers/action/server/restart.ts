@@ -14,7 +14,7 @@ const POLL_INTERVAL_MS = 1000;
 export async function handleServerRestartAction(
     context: Context<"server.restart", "action">
   ): Promise<CallbackResult> {
-    const { logger, payload, octokit, env, config } = context;
+    const { logger, payload, appOctokit, hostOctokit, env, config } = context;
     const { sessionId, workflowId } = payload.client_payload;
   
     logger.info(`Handling server restart in action context`, { sessionId, workflowId });
@@ -23,7 +23,7 @@ export async function handleServerRestartAction(
     const { owner, repo } = env.SYMBIOTE_HOST.FORKED_REPO;
     
     try {
-      const runResponse = await octokit.rest.actions.getWorkflowRun({
+      const runResponse = await appOctokit.rest.actions.getWorkflowRun({
         owner,
         repo,
         run_id: workflowId,
@@ -32,7 +32,7 @@ export async function handleServerRestartAction(
       // If the previous run is still in progress, cancel it
       if (runResponse.data.status === "in_progress" || runResponse.data.status === "queued") {
         logger.info(`Cancelling previous workflow run`, { workflowId });
-        await octokit.rest.actions.cancelWorkflowRun({
+        await appOctokit.rest.actions.cancelWorkflowRun({
           owner,
           repo,
           run_id: workflowId,
@@ -45,7 +45,7 @@ export async function handleServerRestartAction(
           await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
           
           try {
-            const statusResponse = await octokit.rest.actions.getWorkflowRun({
+            const statusResponse = await appOctokit.rest.actions.getWorkflowRun({
               owner,
               repo,
               run_id: workflowId,
@@ -74,13 +74,8 @@ export async function handleServerRestartAction(
     }
   
     // Now start the server normally
-    const runId = process.env.GITHUB_RUN_ID ? parseInt(process.env.GITHUB_RUN_ID, 10) : null;
-    if (!runId) {
-      throw new Error("GITHUB_RUN_ID not found in environment");
-    }
-  
-    const runtimeTracker = createRuntimeTracker(env, octokit, config);
-    await runServerActionLoop(context, runtimeTracker, sessionId, runId);
+    const runtimeTracker = createRuntimeTracker(context);
+    await runServerActionLoop({context, runtimeTracker, sessionId});
   
     return { status: 200, reason: "Server restarted" };
   }

@@ -15,6 +15,7 @@ import { PluginInputs } from "./types/callbacks";
 import { Context } from "./types/index";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { createAdapters } from "./adapters/create-adapters";
+import { createAppOctokit, createUserOctokit } from "./handlers/octokit";
 
 function createLogger(logLevel: LogLevel) {
   return new Logs(logLevel);
@@ -66,6 +67,9 @@ export default {
         return runSymbiote<SupportedEvents, "worker">(
           {
             ...context,
+            // TODO: Worker should only have octokit as standard
+            appOctokit: context.octokit,
+            hostOctokit: context.octokit,
             env: validatedEnv,
             request: clonedRequest,
             pluginInputs: (await clonedRequest.json()) as PluginInputs,
@@ -130,6 +134,9 @@ export default {
 
           const adapters = await createAdapters();
 
+          const appOctokit = await createAppOctokit(validatedEnv);
+          const hostOctokit = await createUserOctokit(validatedPayload.client_payload.authToken);
+
           // Route to appropriate handler via runSymbiote
           const results = await runSymbiote<SupportedEvents, "worker">(
             {
@@ -141,9 +148,8 @@ export default {
               logger: new Logs(validatedEnv.LOG_LEVEL as LogLevel) as unknown as CustomContext["logger"],
               payload: validatedPayload,
               adapters,
-              octokit: new customOctokit({
-                auth: validatedPayload.client_payload.authToken,
-              }),
+              appOctokit,
+              hostOctokit,
               command: null,
               pluginInputs: {
                 stateId: validatedPayload.client_payload.stateId,

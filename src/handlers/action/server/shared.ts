@@ -1,6 +1,6 @@
 import { Context } from "../../../types/index";
 import { createRuntimeTracker } from "../../../utils/runtime-tracker";
-import { pollUserEvents, processEvent } from "./event-poller";
+import { pollUserEvents, processEvent, processNotification } from "./event-poller";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 
 // Time conversion constants
@@ -10,29 +10,28 @@ const SECONDS_TO_MS = 1000;
 /**
  * Main server loop that runs indefinitely until stopped or restarted
  */
-export async function runServerActionLoop(
+export async function runServerActionLoop({
+  context,
+  runtimeTracker,
+  sessionId,
+}:
+{
   context: Context<"server.start" | "server.restart", "action">,
   runtimeTracker: ReturnType<typeof createRuntimeTracker>,
   sessionId: string,
-  workflowRunId: number
+}
 ): Promise<void> {
-  const { logger, env, octokit, config } = context;
+  const { logger, env, appOctokit, hostOctokit, config,  } = context;
   let shouldStop = false;
   let stopSignalReceived = false;
 
-  logger.info(`Server loop started`, { sessionId, workflowRunId });
+  logger.info(`Server loop started`, { sessionId, workflowRunId: context.env.GITHUB_RUN_ID });
 
-  const { owner, repo } = env.SYMBIOTE_HOST.FORKED_REPO;
   const username = env.SYMBIOTE_HOST.USERNAME;
 
   const runtimeCheckIntervalMs = (config.runtimeCheckIntervalMinutes ?? 60) * MINUTES_TO_MS;
   const pollIntervalMs = (config.pollIntervalSeconds ?? 60) * SECONDS_TO_MS;
   const eventsPerPage = config.eventsPerPage ?? 30;
-
-  // Create octokit instance with user PAT for polling user events
-  const userOctokit = new customOctokit({
-    auth: env.SYMBIOTE_HOST_PAT,
-  });
 
   // Set up periodic runtime check
   const runtimeCheckInterval = setInterval(async () => {
@@ -42,7 +41,7 @@ export async function runServerActionLoop(
         logger.info(`Runtime threshold reached, initiating restart`);
         clearInterval(runtimeCheckInterval);
         shouldStop = true;
-        await initiateRestart(context, sessionId, workflowRunId);
+        await initiateRestart(context, sessionId);
       }
     } catch (error) {
       logger.error(`Error checking runtime: ${error}`);
@@ -58,7 +57,18 @@ export async function runServerActionLoop(
       logger.info(`Polling for user events: ${username}`);
       
       // Poll for user events
-      const events = await pollUserEvents(userOctokit, username, eventsPerPage);
+      const {events, notifications} = await pollUserEvents({
+        context,
+        username,
+        perPage: eventsPerPage,
+      });
+
+      if (notifications.length > 0) {
+        logger.info(`Found ${notifications.length} notifications, processing...`);
+        for (const notification of notifications) {
+          await processNotification(context, notification);
+        }
+      }
 
       if (events.length > 0) {
         logger.info(`Found ${events.length} events, processing...`);
@@ -90,7 +100,7 @@ export async function runServerActionLoop(
   }
 
   clearInterval(runtimeCheckInterval);
-  logger.info(`Server loop ended`, { sessionId, workflowRunId });
+  logger.info(`Server loop ended`, { sessionId, workflowRunId: context.env.GITHUB_RUN_ID });
 }
 
 /**
@@ -99,7 +109,6 @@ export async function runServerActionLoop(
 async function initiateRestart(
   context: Context<"server.start" | "server.restart", "action">,
   sessionId: string,
-  workflowRunId: number
 ): Promise<void> {
   const { logger, env, config } = context;
   const { WORKER_URL, WORKER_SECRET } = env;
@@ -110,7 +119,7 @@ async function initiateRestart(
 
   logger.info(`Initiating restart, sending callback to worker`, {
     sessionId,
-    workflowRunId,
+    workflowRunId: context.env.GITHUB_RUN_ID,
     workerUrl: WORKER_URL,
   });
 
@@ -140,7 +149,7 @@ async function initiateRestart(
             client_payload: {
               stateId,
               sessionId,
-              workflowId: workflowRunId,
+              workflowId: context.env.GITHUB_RUN_ID,
               authToken,
               ref,
               command: originalPayload?.command || "",

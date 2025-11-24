@@ -36,7 +36,7 @@ async function workflowDispatch<T extends SupportedEvents = SupportedEvents>(
       throw new Error("Invalid SYMBIOTE_HOST.FORKED_REPO");
     }
 
-    return await context.octokit.rest.actions.createWorkflowDispatch({
+    return await context.appOctokit.rest.actions.createWorkflowDispatch({
       owner,
       repo,
       workflow_id: workflowId,

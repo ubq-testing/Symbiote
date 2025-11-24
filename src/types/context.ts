@@ -22,7 +22,8 @@ export interface CustomContext<
     payload: TSupportedEvents extends keyof typeof customEventSchemas ? CustomEventSchemas<TSupportedEvents> :
     TSupportedEvents extends EmitterWebhookEventName ? EmitterWebhookEvent<TSupportedEvents>["payload"] : never;
     command: TCommand | null;
-    octokit: InstanceType<typeof customOctokit>;
+    appOctokit: InstanceType<typeof customOctokit>;
+    hostOctokit: InstanceType<typeof customOctokit>;
     config: TConfig;
     env: TEnv;
     logger: PluginContext["logger"];

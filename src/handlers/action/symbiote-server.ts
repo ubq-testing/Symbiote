@@ -128,14 +128,14 @@ export class SymbioteServer {
   }
 
   async stopServer(): Promise<CallbackResult> {
-    const { logger, octokit, env } = this._context;
+    const { logger, appOctokit, env } = this._context;
     logger.info(`Stopping Symbiote server`);
 
     if (!this._currentRunData?.id) {
       return { status: 500, reason: "Cannot stop Symbiote server: No run data found" };
     }
 
-    const response = (await octokit.rest.actions.cancelWorkflowRun({
+    const response = (await appOctokit.rest.actions.cancelWorkflowRun({
       owner: env.SYMBIOTE_HOST.FORKED_REPO.owner,
       repo: env.SYMBIOTE_HOST.FORKED_REPO.repo,
       workflow_id: "compute.yml",
@@ -158,10 +158,10 @@ export class SymbioteServer {
 
   // see if we have a server running
   async checkServerDetails() {
-    const { env, octokit } = this._context;
+    const { env, appOctokit } = this._context;
 
     try {
-      const response = await octokit.rest.actions.listWorkflowRuns({
+      const response = await appOctokit.rest.actions.listWorkflowRuns({
         owner: env.SYMBIOTE_HOST.FORKED_REPO.owner,
         repo: env.SYMBIOTE_HOST.FORKED_REPO.repo,
         workflow_id: "compute.yml",

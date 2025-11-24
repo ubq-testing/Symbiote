@@ -2,6 +2,7 @@ import { RestEndpointMethodTypes } from "@ubiquity-os/plugin-sdk/octokit";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { WorkflowEnv } from "../types/env";
 import { PluginSettings } from "../types/plugin-input";
+import { Context } from "../types";
 
 const MS_PER_HOUR = 60 * 60 * 1000;
 
@@ -15,11 +16,10 @@ export interface RuntimeTracker {
  * Creates a runtime tracker for action context using GITHUB_RUN_ID and GitHub API
  */
 export function createRuntimeTracker(
-  env: WorkflowEnv,
-  octokit: InstanceType<typeof customOctokit>,
-  config: PluginSettings
+  context: Context<"server.start" | "server.restart", "action">,
 ): RuntimeTracker {
-  const runId = process.env.GITHUB_RUN_ID ? parseInt(process.env.GITHUB_RUN_ID, 10) : null;
+  const { logger, env, appOctokit, hostOctokit, config } = context;
+  const runId = context.env.GITHUB_RUN_ID ? parseInt(context.env.GITHUB_RUN_ID, 10) : null;
   const { owner, repo } = env.SYMBIOTE_HOST.FORKED_REPO;
 
   const maxRuntimeHours = config.maxRuntimeHours ?? 6;
@@ -41,7 +41,7 @@ export function createRuntimeTracker(
     }
 
     try {
-      const response = await octokit.rest.actions.getWorkflowRun({
+      const response = await appOctokit.rest.actions.getWorkflowRun({
         owner,
         repo,
         run_id: runId,
