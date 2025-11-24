@@ -1,10 +1,10 @@
 import { createActionsPlugin } from "@ubiquity-os/plugin-sdk";
 import { LOG_LEVEL, LogLevel } from "@ubiquity-os/ubiquity-os-logger";
-import { runSymbiote } from "./index.ts";
+import { runSymbiote } from "./index";
 import { pluginSettingsSchema, PluginSettings, SupportedEvents, SupportedCustomEvents, SupportedWebhookEvents } from "./types/index";
 import { WorkflowEnv, workflowEnvSchema } from "./types/env";
 import { validateEnvironment } from "./utils/validate-env";
-import { Command } from "./types/command.ts";
+import { Command } from "./types/command";
 import { decompressString } from "@ubiquity-os/plugin-sdk/compression";
 
 async function runAction() {
@@ -61,7 +61,14 @@ async function runAction() {
                 logLevel: (process.env.LOG_LEVEL as LogLevel) ?? LOG_LEVEL.INFO,
                 kernelPublicKey: process.env.KERNEL_PUBLIC_KEY as string,
                 bypassSignatureVerification: true
-            })
+            } as unknown as Parameters<
+                typeof createActionsPlugin<
+                    PluginSettings,
+                    WorkflowEnv,
+                    Command,
+                    SupportedWebhookEvents & SupportedCustomEvents
+                >
+            >[1])
 
         process.exit(0);
     } catch (error) {
