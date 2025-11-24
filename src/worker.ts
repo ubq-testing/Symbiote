@@ -4,7 +4,7 @@ import { LOG_LEVEL, LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { ExecutionContext } from "hono";
 import manifest from "../manifest.json" with { type: "json" };
 import { runSymbiote } from "./index.ts";
-import { workerEnvSchema, pluginSettingsSchema, PluginSettings, SupportedEvents, SupportedCustomEvents, SupportedWebhookEvents } from "./types/index";
+import { workerEnvSchema, pluginSettingsSchema, PluginSettings, SupportedEvents, SupportedCustomEvents, SupportedWebhookEvents, CustomContext } from "./types/index";
 import { WorkerEnv } from "./types/env";
 import { Command } from "./types/command";
 import { Value } from "@sinclair/typebox/value";
@@ -126,7 +126,7 @@ export default {
               commentHandler: new CommentHandler(),
               config,
               env: validatedEnv,
-              logger: new Logs(validatedEnv.LOG_LEVEL as LogLevel),
+              logger: new Logs(validatedEnv.LOG_LEVEL as LogLevel) as CustomContext["logger"],
               payload: validatedPayload,
               octokit: new customOctokit({
                 auth: validatedPayload.client_payload.authToken,
