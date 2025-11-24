@@ -5,41 +5,9 @@ import { pluginSettingsSchema, PluginSettings, SupportedEvents, SupportedCustomE
 import { WorkflowEnv, workflowEnvSchema } from "./types/env";
 import { validateEnvironment } from "./utils/validate-env";
 import { Command } from "./types/command";
-import { decompressString } from "@ubiquity-os/plugin-sdk/compression";
 
 async function runAction() {
     process.env = validateEnvironment(process.env as Record<string, string>, "action") as unknown as Record<string, string>;
-
-    const github = await import("@actions/github");
-    const payload = github.context.payload.inputs;
-
-    let eventPayload, settings;
-
-    try {
-        eventPayload = JSON.parse(decompressString(payload.eventPayload));
-    } catch (error) {
-        console.error("Error decompressing event payload:", error);
-        process.exit(1);
-    }
-
-    try {
-        settings = JSON.parse(payload.settings);
-    } catch (error) {
-        console.error("Error parsing settings:", error);
-        process.exit(1);
-    }
-
-    const pluginInputs = {
-        stateId: payload.stateId,
-        eventName: payload.eventName,
-        eventPayload: eventPayload,
-        settings: settings,
-        authToken: payload.authToken,
-        ref: payload.ref,
-        command: payload.command,
-    }
-
-    github.context.payload.inputs = pluginInputs;
 
     try {
         await createActionsPlugin<

@@ -47,7 +47,6 @@ async function workflowDispatch<T extends SupportedEvents = SupportedEvents>(
         authToken,
         ref,
         command,
-        // Match plugin.ts pattern: compress eventPayload, stringify settings (no compression)
         eventPayload: compressString(JSON.stringify(context.payload)),
         settings: JSON.stringify(context.config),
       },
