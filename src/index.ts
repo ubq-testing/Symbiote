@@ -14,6 +14,9 @@ export async function runSymbiote<
   const { logger } = context;
   let callbackResults: CallbackResult[] = [];
 
+  logger.info(`Running symbiote for event: ${context.eventName} in runtime: ${context.runtime}`);
+  logger.info(`Context: ${JSON.stringify(context.payload)}`);
+
   if (isEdgeRuntimeCtx<T>(context)) {
     const results = await handleCallbacks<T, "worker">(context, workerCallbacks);
 
