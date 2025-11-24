@@ -6,6 +6,7 @@ import { customOctokit} from "@ubiquity-os/plugin-sdk/octokit";
 import { customEventSchemas, CustomEventSchemas } from "./custom-event-schemas";
 import { Command } from "./command";
 import { PluginInputs } from "./callbacks";
+import { Adapters } from "../adapters/create-adapters";
 
 export type SupportedCustomEvents = "server.start" | "server.restart" | "server.stop";
 export type SupportedWebhookEvents = "issue_comment.created" | "issues.opened" | "pull_request.opened";
@@ -26,6 +27,7 @@ export interface CustomContext<
     env: TEnv;
     logger: PluginContext["logger"];
     commentHandler: CommentHandler;
+    adapters: Adapters;
 }
 
 /**

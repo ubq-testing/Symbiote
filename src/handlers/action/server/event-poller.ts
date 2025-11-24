@@ -19,13 +19,13 @@ export async function pollUserEvents(octokit: InstanceType<typeof customOctokit>
 
 /**
  * Determines the routing strategy for an event based on repository type and ubiquity app installation
- * 
+ *
  * Routing strategy: 'kernel-forwarded' | 'safe-action' | 'unsafe-action'
- * 
+ *
  * kernel-forwarded: The event is forwarded to the kernel (the user's kernel so it will forward it if we need it, so we could ignore it)
  * safe-action: The event is handled by the safe action  (the user's app so we can handle it)
  * unsafe-action: The event is handled by the unsafe action (the user's app cannot possibly handle it, so we auth as the user and we handle it)
- * 
+ *
  */
 export async function determineEventRouting(
   context: Context<"server.start" | "server.restart", "action">,
@@ -33,7 +33,10 @@ export async function determineEventRouting(
 ): Promise<"kernel-forwarded" | "safe-action" | "unsafe-action"> {
   const { logger, octokit, env } = context;
 
-  // Extract repository information from event
+  /**
+   * Extract repository information from the event which
+   * can be from any org, user, repo, etc.
+   */
   const repo = event.repo;
   if (!repo) {
     logger.warn(`Event ${event.id} has no repository information, skipping`);
@@ -60,7 +63,7 @@ export async function determineEventRouting(
     try {
       // Attempt to get app installation - if this succeeds, app is installed
       const installations = await octokit.rest.apps.listInstallations();
-      hasApp = installations.data.some((installation) => installation.account?.login === owner);
+      hasApp = installations.data.some((installation) => installation.account?.login.toLowerCase() === owner.toLowerCase());
     } catch (e) {
       logger.error(`Error checking app installation: `, { e });
       hasApp = false;
@@ -84,6 +87,32 @@ export async function determineEventRouting(
   }
 }
 
+async function handleRouting({
+  routing,
+  context,
+  event,
+}: {
+  routing: "kernel-forwarded" | "safe-action" | "unsafe-action";
+  context: Context<"server.start" | "server.restart", "action">;
+  event: UserEvent | undefined;
+}): Promise<void> {
+  if (!event) {
+    context.logger.warn(`Event is undefined, skipping`);
+    return;
+  }
+  switch (routing) {
+    case "kernel-forwarded":
+      await handleKernelForwardedEvent(context, event);
+      break;
+    case "safe-action":
+      await handleSafeActionEvent(context, event);
+      break;
+    case "unsafe-action":
+      await handleUnsafeActionEvent(context, event);
+      break;
+  }
+}
+
 /**
  * Processes a single GitHub user event
  * This is a shell implementation that logs the event and routes it appropriately
@@ -92,7 +121,11 @@ export async function determineEventRouting(
  */
 export async function processEvent(context: Context<"server.start" | "server.restart", "action">, event: UserEvent): Promise<void> {
   const { logger } = context;
-
+  const [owner, repoName] = event.repo?.name?.split("/") ?? [];
+  if (!owner || !repoName) {
+    logger.warn(`Event ${event.id} has invalid repository name: ${event.repo?.name}`);
+    throw new Error(`Invalid repository name: ${event.repo?.name}`);
+  }
   logger.info(`Processing event: ${event.type}`, {
     eventId: event.id,
     repo: event.repo?.name,
@@ -100,25 +133,34 @@ export async function processEvent(context: Context<"server.start" | "server.res
     createdAt: event.created_at,
   });
 
-  try {
-    // Determine routing strategy
-    const routing = await determineEventRouting(context, event);
+  const cachedRouting = await context.adapters.kv.get<"kernel-forwarded" | "safe-action" | "unsafe-action">(["routing", owner, repoName]);
+  if (cachedRouting && cachedRouting.value) {
+    context.logger.info(`[EVENT-POLLER] Cache hit for event ${event.id} in ${event.repo?.name} from ${event.actor?.login}: routing as ${cachedRouting.value}`);
 
-    // Route event based on strategy
-    switch (routing) {
-      case "kernel-forwarded":
-        await handleKernelForwardedEvent(context, event);
-        break;
-      case "safe-action":
-        await handleSafeActionEvent(context, event);
-        break;
-      case "unsafe-action":
-        await handleUnsafeActionEvent(context, event);
-        break;
+    try {
+      return await handleRouting({
+        routing: cachedRouting.value,
+        context,
+        event,
+      });
+    } catch (error) {
+      logger.error(`Error handling routing for event ${event.id}: ${error}`);
+      throw error;
     }
-  } catch (error) {
-    logger.error(`Error processing event ${event.id}: ${error}`);
-    // Continue processing other events even if one fails
+  } else {
+    try {
+      const routing = await determineEventRouting(context, event);
+      await context.adapters.kv.set([`routing:${owner}:${repoName}`], routing);
+      context.logger.info(`[EVENT-POLLER] Cache miss for event ${event.id} in ${event.repo?.name} from ${event.actor?.login}: routing as ${routing}`);
+      return await handleRouting({
+        routing,
+        context,
+        event,
+      });
+    } catch (error) {
+      logger.error(`Error determining routing for event ${event.id}: ${error}`);
+      throw error;
+    }
   }
 }
 
@@ -129,8 +171,7 @@ export async function processEvent(context: Context<"server.start" | "server.res
 async function handleKernelForwardedEvent(context: Context<"server.start" | "server.restart", "action">, event: UserEvent): Promise<void> {
   const { logger } = context;
   logger.info(`[KERNEL-FORWARDED] Handling event ${event.id} from ${event.repo?.name}`, {
-    eventType: event.type,
-    eventId: event.id,
+    event
   });
   // TODO: Forward event to kernel via existing infrastructure
 }
@@ -142,8 +183,7 @@ async function handleKernelForwardedEvent(context: Context<"server.start" | "ser
 async function handleSafeActionEvent(context: Context<"server.start" | "server.restart", "action">, event: UserEvent): Promise<void> {
   const { logger } = context;
   logger.info(`[SAFE-ACTION] Handling event ${event.id} from ${event.repo?.name}`, {
-    eventType: event.type,
-    eventId: event.id,
+    event
   });
   // TODO: Use app authentication to handle event
 }
@@ -155,8 +195,7 @@ async function handleSafeActionEvent(context: Context<"server.start" | "server.r
 async function handleUnsafeActionEvent(context: Context<"server.start" | "server.restart", "action">, event: UserEvent): Promise<void> {
   const { logger } = context;
   logger.info(`[UNSAFE-ACTION] Handling event ${event.id} from ${event.repo?.name}`, {
-    eventType: event.type,
-    eventId: event.id,
+    event
   });
   // TODO: Queue event for main workflow with user PAT authentication
 }

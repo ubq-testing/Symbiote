@@ -5,6 +5,7 @@ import { pluginSettingsSchema, PluginSettings, SupportedEvents, SupportedCustomE
 import { WorkflowEnv, workflowEnvSchema } from "./types/env";
 import { validateEnvironment } from "./utils/validate-env";
 import { Command } from "./types/command";
+import { createAdapters } from "./adapters/create-adapters";
 
 async function runAction() {
     process.env = validateEnvironment(process.env as Record<string, string>, "action") as unknown as Record<string, string>;
@@ -16,10 +17,12 @@ async function runAction() {
             Command,
             SupportedWebhookEvents & SupportedCustomEvents
         >(
-            (context) => {
+            async(context) => {
+                const adapters = await createAdapters();
                 return runSymbiote<SupportedEvents, "action">({
                     ...context,
                     runtime: "action",
+                    adapters,
                 })
             },
             {

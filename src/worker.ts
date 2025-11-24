@@ -14,6 +14,7 @@ import { validateEnvironment } from "./utils/validate-env";
 import { PluginInputs } from "./types/callbacks";
 import { Context } from "./types/index";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
+import { createAdapters } from "./adapters/create-adapters";
 
 function createLogger(logLevel: LogLevel) {
   return new Logs(logLevel);
@@ -61,6 +62,7 @@ export default {
 
     const honoApp = createPlugin<PluginSettings, WorkerEnv, Command, SupportedWebhookEvents & SupportedCustomEvents>(
       async (context) => {
+        const adapters = await createAdapters();
         return runSymbiote<SupportedEvents, "worker">(
           {
             ...context,
@@ -68,6 +70,7 @@ export default {
             request: clonedRequest,
             pluginInputs: (await clonedRequest.json()) as PluginInputs,
             runtime: "worker",
+            adapters,
           },
         );
       },
@@ -125,8 +128,10 @@ export default {
 
           const config = await getDefaultConfig();
 
+          const adapters = await createAdapters();
+
           // Route to appropriate handler via runSymbiote
-          const results = await runSymbiote(
+          const results = await runSymbiote<SupportedEvents, "worker">(
             {
               eventName: event,
               request: clonedRequest,
@@ -135,6 +140,7 @@ export default {
               env: validatedEnv,
               logger: new Logs(validatedEnv.LOG_LEVEL as LogLevel) as unknown as CustomContext["logger"],
               payload: validatedPayload,
+              adapters,
               octokit: new customOctokit({
                 auth: validatedPayload.client_payload.authToken,
               }),
