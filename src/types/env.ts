@@ -97,5 +97,9 @@ export const workflowEnvSchema = T.Composite([sharedSchema, T.Object({
     minLength: 1,
     description: "The URL of the Symbiote worker to use for the plugin."
   }),
+  GITHUB_RUN_ID: T.String({
+    minLength: 1,
+    description: "The ID of the GitHub workflow run."
+  }),
 })]);
 export type WorkflowEnv = StaticDecode<typeof workflowEnvSchema>;
