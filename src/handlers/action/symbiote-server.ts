@@ -3,7 +3,7 @@ import { Context, SupportedCustomEvents, SupportedEvents, SymbioteRuntime } from
 import { dispatcher } from "../dispatcher";
 import { CallbackResult } from "../../types/callbacks";
 import { customEventSchemas } from "../../types/custom-event-schemas";
-import { isActionRuntimeCtx } from "../../types/typeguards";
+import { isActionRuntimeCtx, isEdgeRuntimeCtx } from "../../types/typeguards";
 
 const MS_PER_HOUR = 60 * 60 * 1000;
 
@@ -17,7 +17,7 @@ export class SymbioteServer {
   private _currentRuntimeHours = 0;
   private _currentRunData: RestEndpointMethodTypes["actions"]["listWorkflowRuns"]["response"]["data"]["workflow_runs"][0] | null = null;
   private _sessionId: string | null = null;
-  private _context: Context<SupportedEvents, "action">;
+  private _context: Context<SupportedEvents, SymbioteRuntime>;
   /**
    * Not the file name of the action used when dispatch,
    * but the workflow ID of the workflow run that is currently running.
@@ -28,11 +28,12 @@ export class SymbioteServer {
   private _workflowId: number | null = null;
 
   constructor(context: Context<SupportedEvents, SymbioteRuntime>) {
-    if (!isCustomEvent(context) || !isActionRuntimeCtx(context)) {
-      throw new Error("Context must be a custom event and an action context");
+    if(isCustomEvent(context)) {
+      this._sessionId = context.payload.client_payload.stateId;
+    } else if(isEdgeRuntimeCtx(context)) {
+      this._sessionId = context.pluginInputs?.stateId;
     }
     this._context = context;
-    this._sessionId = context.payload.client_payload.stateId;
     const maxRuntimeHours = context.config.maxRuntimeHours ?? 6;
     const safetyBufferHours = 1;
     this._maxRuntimeHours = maxRuntimeHours - safetyBufferHours;

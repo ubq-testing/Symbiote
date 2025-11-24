@@ -2,19 +2,8 @@ import { Context, SupportedEvents, SymbioteRuntime } from "../types/index";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { CallbackResult } from "../types/callbacks";
 import { isActionRuntimeCtx, isEdgeRuntimeCtx } from "../types/typeguards";
+import { compressString} from "@ubiquity-os/plugin-sdk/compression";
 
-/**
- * Encodes a string to base64 for transmission in workflow inputs.
- */
-function encodeString(str: string): string {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(str);
-  let binary = "";
-  for (let i = 0; i < data.length; i++) {
-    binary += String.fromCharCode(data[i]);
-  }
-  return btoa(binary);
-}
 
 export async function dispatcher(context: Context<SupportedEvents, SymbioteRuntime>, workflowId = "compute.yml"): Promise<CallbackResult> {
   const result = await workflowDispatch(context, workflowId);
@@ -57,8 +46,8 @@ async function workflowDispatch<T extends SupportedEvents = SupportedEvents>(
       ref: context.config.executionBranch,
       inputs: {
         ...pluginInputs,
-        eventPayload: encodeString(JSON.stringify(context.payload)),
-        settings: JSON.stringify(context.config),
+        eventPayload: compressString(JSON.stringify(context.payload)),
+        settings: compressString(JSON.stringify(context.config)),
       },
     });
   } else {

@@ -14,7 +14,6 @@ import { validateEnvironment } from "./utils/validate-env";
 import { PluginInputs } from "./types/callbacks.ts";
 import { Context } from "./types/index";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
-import { ContentfulStatusCode } from "hono/utils/http-status.js";
 
 function createLogger(logLevel: LogLevel) {
   return new Logs(logLevel);
@@ -148,7 +147,7 @@ export default {
           );
 
           
-          return c.json({ ...results }, results.status as ContentfulStatusCode);
+          return c.json({ ...results }, results.status as never);
         } catch (error) {
           logger.error(`Error handling callback: ${error}`);
           return c.json({ message: error instanceof Error ? error.message : String(error) }, 500);
