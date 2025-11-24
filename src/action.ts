@@ -39,7 +39,7 @@ async function runAction() {
         command: payload.command,
     }
 
-    github.context.payload = pluginInputs;
+    github.context.payload.inputs = pluginInputs;
 
     try {
         await createActionsPlugin<
