@@ -288,6 +288,7 @@ async function handlePullRequestMention(args: NotificationHandlerArgs): Promise<
     unread: summary.unread,
     createdAt: summary.createdAt ?? summary.updatedAt,
     additionalContext: buildAdditionalContext(summary, mentionContext),
+    octokit: context.hostOctokit,
   };
 
   const assessment = await adapters.ai.classifyMention(aiRequest);

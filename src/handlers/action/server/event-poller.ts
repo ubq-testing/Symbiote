@@ -278,7 +278,6 @@ export async function processEvent(context: Context<"server.start" | "server.res
 
   if (cachedRouting && cachedRouting.value) {
     context.logger.info(`[EVENT-POLLER] Cache hit for event ${event.id} in ${event.repo?.name} from ${event.actor?.login}: routing as ${cachedRouting.value}`);
-    context.logger.info(`[EVENT-POLLER] Skipping routing for event ${event.id} in ${event.repo?.name} from ${event.actor?.login}`);
     return { status: 200, reason: "Event processed successfully", content: JSON.stringify(cachedRouting.value) };
   } else {
     try {
@@ -311,9 +310,7 @@ export async function processEvent(context: Context<"server.start" | "server.res
  */
 async function handleKernelForwardedEvent(context: Context<"server.start" | "server.restart", "action">, event: UserEvent): Promise<void> {
   const { logger } = context;
-  logger.info(`[KERNEL-FORWARDED] Handling event ${event.id} from ${event.repo?.name}`, {
-    event,
-  });
+  logger.info(`[KERNEL-FORWARDED] Handling event ${event.id} from ${event.repo?.name}`);
   // TODO: Forward event to kernel via existing infrastructure
 }
 
@@ -323,9 +320,7 @@ async function handleKernelForwardedEvent(context: Context<"server.start" | "ser
  */
 async function handleSafeActionEvent(context: Context<"server.start" | "server.restart", "action">, event: UserEvent): Promise<void> {
   const { logger } = context;
-  logger.info(`[SAFE-ACTION] Handling event ${event.id} from ${event.repo?.name}`, {
-    event,
-  });
+  logger.info(`[SAFE-ACTION] Handling event ${event.id} from ${event.repo?.name}`);
   // TODO: Use app authentication to handle event
 }
 
@@ -335,8 +330,6 @@ async function handleSafeActionEvent(context: Context<"server.start" | "server.r
  */
 async function handleUnsafeActionEvent(context: Context<"server.start" | "server.restart", "action">, event: UserEvent): Promise<void> {
   const { logger } = context;
-  logger.info(`[UNSAFE-ACTION] Handling event ${event.id} from ${event.repo?.name}`, {
-    event,
-  });
+  logger.info(`[UNSAFE-ACTION] Handling event ${event.id} from ${event.repo?.name}`);
   // TODO: Queue event for main workflow with user PAT authentication
 }
