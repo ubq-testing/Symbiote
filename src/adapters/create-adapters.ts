@@ -1,4 +1,4 @@
-import { WorkerEnv, WorkflowEnv } from "../types";
+import { WorkerEnv, WorkflowEnv } from "../types/index";
 import { createKvAdapter, KvAdapter } from "./kv";
 
 export interface Adapters {

@@ -1,5 +1,5 @@
 import { openKv, AtomicOperation, Kv, KvCommitResult, KvConsistencyLevel, KvEntryMaybe, KvKey, KvKeyPart, KvListIterator } from "@deno/kv";
-import { WorkerEnv, WorkflowEnv } from "../types";
+import { WorkerEnv, WorkflowEnv } from "../types/index";
 
 function isLocalOrWorkflowEnv(env: WorkflowEnv | WorkerEnv): env is WorkflowEnv & { NODE_ENV: "local" } {
   return "GITHUB_RUN_ID" in env || env.NODE_ENV === "local";
