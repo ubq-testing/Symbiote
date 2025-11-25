@@ -1,7 +1,7 @@
 import { WorkerEnv, WorkflowEnv } from "../types/index";
 import { PluginSettings } from "../types/plugin-input";
 import { createKvAdapter, KvAdapter } from "./kv";
-import { AiAdapter, createAiAdapter } from "./ai";
+import { AiAdapter, createAiAdapter } from "./ai/adapter";
 
 export interface Adapters {
   kv: KvAdapter;

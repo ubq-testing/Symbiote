@@ -1,6 +1,6 @@
 import { Context } from "../../../../types/index";
 import type { Notification } from "../event-poller";
-import type { MentionAssessmentRequest } from "../../../../adapters/ai";
+import type { MentionAssessmentRequest } from "../../../../adapters/ai/adapter";
 
 type NotificationHandlerArgs = {
   context: Context<"server.start" | "server.restart", "action">;
