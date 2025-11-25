@@ -87,83 +87,90 @@ export async function determineEventRouting(
 
   const orgName = org?.login;
 
+  let isPrivate = false;
   try {
-    // Attempt to get app installation - if this succeeds, app is installed
-    const appAuth = await appOctokit.rest.apps.getAuthenticated();
-    if (appAuth.data) {
-      logger.info(`App authentication: ${appAuth.data.id}`, { appAuth });
-    }
-  } catch (er) {
-    logger.error(`Error checking app authentication: `, { owner, repoName, orgName });
-  }
-
-  try {
-    // Check if repository is private
     const repoResponse = await appOctokit.rest.repos.get({
       owner,
       repo: repoName,
     });
 
-    const isPrivate = repoResponse.data.private;
-
-    // Check if app is installed on the repository
-    let hasApp = false;
-    try {
-      const repoOctokit = await createRepoOctokit({
-        env,
-        owner,
-        repo: repoName,
-      });
-
-      if (repoOctokit) {
-        hasApp = true;
-      }
-    } catch (e) {
-      logger.error(`Error creating repo octokit: `, { owner, repoName, orgName });
-    }
-
-    try {
-      const installations = await appOctokit.rest.apps.listInstallations();
-      const loginInstallation = installations.data.find((installation) => installation.account?.login.toLowerCase() === owner.toLowerCase());
-      const namedInstallation = installations.data.find((installation) => installation.account?.name?.toLowerCase() === owner.toLowerCase());
-
-      let installation = loginInstallation || namedInstallation;
-
-      if (installation) {
-        console.log(`Installation: ${installation.id}`, { installation });
-        hasApp = true;
-      } else {
-        console.log(`No installation found for ${owner}`, {
-          installations: installations.data.map((installation) => {
-            return {
-              id: installation.id,
-              account: installation.account?.login,
-            };
-          }),
-        });
-      }
-    } catch (e) {
-      logger.error(`Error listing installations: `, { owner, repoName, orgName });
-    }
-
-    logger.info(`App installation check for ${owner} in ${repoName}: ${hasApp}`);
-
-    // Route based on repository type and app installation
-    if (hasApp) {
-      logger.info(`Event ${event.id} from ${repo.name}: routing as kernel-forwarded (app installed)`);
-      return "kernel-forwarded";
-    } else if (!isPrivate) {
-      logger.info(`Event ${event.id} from ${repo.name}: routing as safe-action (public repo)`);
-      return "safe-action";
-    } else {
-      logger.info(`Event ${event.id} from ${repo.name}: routing as unsafe-action (private repo)`);
-      return "unsafe-action";
-    }
-  } catch (error) {
-    logger.error(`Error determining routing for event ${event.id}: ${error}`);
-    // Default to unsafe-action if we can't determine
-    return "unsafe-action";
+    isPrivate = repoResponse.data.private;
+  } catch (e) {
+    logger.error(`Error checking repository private status: `, { owner, repoName, orgName });
+    isPrivate = true;
   }
+
+  try {
+    // Attempt to get app installation - if this succeeds, app is installed
+    const appAuth = await appOctokit.rest.apps.getAuthenticated();
+    if (appAuth.data) {
+      const { slug, name: appName, owner: appOwner } = appAuth.data;
+
+      const appOwnerName = "login" in appOwner ? appOwner.login : (appOwner.name ?? "");
+      if (appOwnerName && appOwnerName.toLowerCase() === owner.toLowerCase()) {
+        logger.info(`App authentication: ${slug}`, { slug, appName, appOwnerName, appOwner });
+        return "kernel-forwarded";
+      }
+    }
+  } catch (er) {
+    logger.error(`Error checking app authentication: `, { owner, repoName, orgName });
+  }
+
+  // Check if app is installed on the repository
+  let hasApp = false;
+
+  try {
+    const installations = await appOctokit.rest.apps.listInstallations();
+    const loginInstallation = installations.data.find((installation) => installation.account?.login.toLowerCase() === owner.toLowerCase());
+    const namedInstallation = installations.data.find((installation) => installation.account?.name?.toLowerCase() === owner.toLowerCase());
+
+    let installation = loginInstallation || namedInstallation;
+
+    if (installation) {
+      console.log(`Installation: ${installation.id}`, { installation });
+      hasApp = true;
+    } else {
+      console.log(`No installation found for ${owner}`, {
+        installations: installations.data.map((installation) => {
+          return {
+            id: installation.id,
+            account: installation.account?.login,
+          };
+        }),
+      });
+    }
+  } catch (e) {
+    logger.error(`Error listing installations: `, { owner, repoName, orgName });
+  }
+
+  try {
+    const repoOctokit = await createRepoOctokit({
+      env,
+      owner,
+      repo: repoName,
+    });
+
+    if (repoOctokit) {
+      hasApp = true;
+    }
+  } catch (e) {
+    logger.error(`Error creating repo octokit: `, { owner, repoName, orgName });
+  }
+
+  logger.info(`App installation check for ${owner} in ${repoName}: ${hasApp}`);
+
+  // Route based on repository type and app installation
+  if (hasApp) {
+    logger.info(`Event ${event.id} from ${repo.name}: routing as kernel-forwarded (app installed)`);
+    return "kernel-forwarded";
+  } else if (!isPrivate) {
+    logger.info(`Event ${event.id} from ${repo.name}: routing as safe-action (public repo)`);
+    return "safe-action";
+  }
+
+
+  logger.info(`Event ${event.id} from ${repo.name}: routing as unsafe-action (private repo)`);
+  return "unsafe-action";
 }
 
 async function handleRouting({
