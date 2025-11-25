@@ -172,15 +172,10 @@ async function determineRepositoryRouting(
   if (hasInstalledApp) {
     logger.info(`[ROUTING][${subjectLabel}] routing as kernel-forwarded (app installed)`);
     return "kernel-forwarded";
-  } else if (isPrivate) {
-    logger.info(`[ROUTING][${subjectLabel}] routing as unsafe-action (private repo)`);
+  } else {
+    logger.info(`[ROUTING][${subjectLabel}] routing as unsafe-action (no app installed)`);
     return "unsafe-action";
-  } else if (isPrivate === false) {
-    logger.info(`[ROUTING][${subjectLabel}] routing as safe-action (public repo)`);
-    return "safe-action";
   }
-
-  throw new Error(`[ROUTING][${subjectLabel}] could not determine repository type for ${repoFullName}`);
 }
 
 export async function handleRouting({
