@@ -1,7 +1,6 @@
 import { Context } from "../../../types/index";
 import { createRuntimeTracker } from "../../../utils/runtime-tracker";
 import { pollUserEvents, processEvent, processNotification } from "./event-poller";
-import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 
 // Time conversion constants
 const MINUTES_TO_MS = 60 * 1000;

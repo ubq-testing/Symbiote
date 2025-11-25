@@ -3,7 +3,8 @@ import { Context, SupportedCustomEvents, SupportedEvents, SymbioteRuntime } from
 import { dispatcher } from "../dispatcher";
 import { CallbackResult } from "../../types/callbacks";
 import { customEventSchemas } from "../../types/custom-event-schemas";
-import { isActionRuntimeCtx, isEdgeRuntimeCtx } from "../../types/typeguards";
+import { isCommentEvent } from "../../types/typeguards";
+import { readUserToken, generateOAuthState, storePendingState, buildAuthorizationUrl, postAuthorizationComment } from "../worker/routes/oauth/backend";
 
 const MS_PER_HOUR = 60 * 60 * 1000;
 
@@ -17,7 +18,7 @@ export class SymbioteServer {
   private _currentRuntimeHours = 0;
   private _currentRunData: RestEndpointMethodTypes["actions"]["listWorkflowRuns"]["response"]["data"]["workflow_runs"][0] | null = null;
   private _sessionId: string | null = null;
-  private _context: Context<SupportedEvents, SymbioteRuntime>;
+  private _context: Context<"issue_comment.created" | "server.start" | "server.restart" | "server.stop", "worker">;
   /**
    * Not the file name of the action used when dispatch,
    * but the workflow ID of the workflow run that is currently running.
@@ -27,11 +28,11 @@ export class SymbioteServer {
    */
   private _workflowId: number | null = null;
 
-  constructor(context: Context<SupportedEvents, SymbioteRuntime>) {
-    if(isCustomEvent(context)) {
+  constructor(context: Context<"issue_comment.created" | "server.start" | "server.restart" | "server.stop", "worker">) {
+    if (isCommentEvent(context)) {
+      this._sessionId = context.pluginInputs.stateId;
+    } else if (isCustomEvent(context)) {
       this._sessionId = context.payload.client_payload.stateId;
-    } else if(isEdgeRuntimeCtx(context)) {
-      this._sessionId = context.pluginInputs?.stateId;
     }
     this._context = context;
     const maxRuntimeHours = context.config.maxRuntimeHours ?? 6;
@@ -119,9 +120,15 @@ export class SymbioteServer {
       payload: {
         action: "server.start",
         client_payload: {
-          ...(this._context as Context<SupportedCustomEvents, "action">).payload.client_payload,
-          sessionId: this._sessionId,
-          workflowId: this._currentRunData?.id ?? this._workflowId ?? 0,
+          ...(isCommentEvent(this._context)
+            ? {
+                ...this._context.pluginInputs,
+              }
+            : {
+                ...this._context.payload.client_payload,
+              }),
+          workflowId: this.workflowId ?? 0,
+          sessionId: this.sessionId ?? "",
         },
       },
     });
@@ -182,5 +189,71 @@ export class SymbioteServer {
 
       throw this._context.logger.error(`Error checking server details: ${error}`, { error: error });
     }
+  }
+
+  async handleServerStart(): Promise<CallbackResult> {
+    const { logger, payload, adapters, env, appOctokit } = this._context;
+    let sessionId, workflowId;
+    if (isCommentEvent(this._context)) {
+      sessionId = this._context.pluginInputs.stateId;
+      workflowId = this._workflowId ?? 0;
+    } else if (isCustomEvent(this._context)) {
+      sessionId = this._context.payload.client_payload.sessionId;
+      workflowId = this._context.payload.client_payload.workflowId;
+    }
+
+    logger.info(`Handling server.start event in worker`, { sessionId, workflowId });
+
+    const login = this._context.env.SYMBIOTE_HOST.USERNAME;
+    const cachedToken = await readUserToken(adapters.kv, login);
+    let owner, repo, issueNumber;
+
+    if (!cachedToken) {
+      if (isCommentEvent(this._context)) {
+        owner = this._context.payload.repository?.owner?.login;
+        repo = this._context.payload.repository?.name;
+        issueNumber = this._context.payload.issue?.number;
+
+        if (!issueNumber) {
+          throw logger.error("Missing issue or pull request number when requesting OAuth authorization");
+        }
+      } else if (isCustomEvent(this._context)) {
+        // TODO: Implement custom event handling
+        // in reality, we shouldn't need this i don't think
+        throw new Error("Custom event OAuth not implemented");
+      }
+
+      if (!owner || !repo || !issueNumber) {
+        logger.error("Missing repository or issue context when requesting OAuth authorization");
+        return { status: 500, reason: "Unable to build OAuth authorization comment" };
+      }
+
+      const state = generateOAuthState();
+      await storePendingState(adapters.kv, state, {
+        login,
+        owner,
+        repo,
+        issueNumber,
+        createdAt: new Date().toISOString(),
+      });
+
+      const authUrl = buildAuthorizationUrl(env, state);
+      await postAuthorizationComment({
+        appOctokit,
+        owner,
+        repo,
+        issueNumber,
+        login,
+        url: authUrl,
+      });
+
+      logger.info("OAuth authorization requested", { login, owner, repo, issueNumber, state });
+      return { status: 200, reason: "OAuth authorization requested. Please follow the comment link." };
+    }
+
+    this._context.pluginInputs.authToken = cachedToken;
+    logger.info("Using cached OAuth token for user", { login });
+
+    return await this.spawnServer();
   }
 }

@@ -1,8 +1,11 @@
 import { CallbackResult } from "../../types/callbacks";
-import { Context, SupportedEvents, SymbioteRuntime } from "../../types/index";
+import { Context } from "../../types/index";
 import { SymbioteServer } from "../action/symbiote-server";
 
-export async function handleSymbioteServer(context: Context<SupportedEvents, SymbioteRuntime>, command: "start" | "restart" | "stop") {
+export async function handleSymbioteServer(
+  context: Context<"issue_comment.created" | "server.start" | "server.restart" | "server.stop", "worker">,
+  command: "start" | "restart" | "stop"
+) {
   const { logger } = context;
   const server = new SymbioteServer(context);
   const { isRunning } = await server.init();
