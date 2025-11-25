@@ -1,11 +1,12 @@
+import { WorkerEnv, WorkflowEnv } from "../types";
 import { createKvAdapter, KvAdapter } from "./kv";
 
 export interface Adapters {
   kv: KvAdapter;
 }
 
-export async function createAdapters(): Promise<Adapters> {
+export async function createAdapters(env: WorkflowEnv | WorkerEnv): Promise<Adapters> {
   return {
-    kv: await createKvAdapter(),
+    kv: await createKvAdapter(env),
   }
 }

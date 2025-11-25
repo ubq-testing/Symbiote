@@ -13,7 +13,6 @@ import { env as honoEnv } from "hono/adapter";
 import { validateEnvironment } from "./utils/validate-env";
 import { PluginInputs } from "./types/callbacks";
 import { Context } from "./types/index";
-import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { createAdapters } from "./adapters/create-adapters";
 import { createAppOctokit, createUserOctokit } from "./handlers/octokit";
 
@@ -63,7 +62,7 @@ export default {
 
     const honoApp = createPlugin<PluginSettings, WorkerEnv, Command, SupportedWebhookEvents & SupportedCustomEvents>(
       async (context) => {
-        const adapters = await createAdapters();
+        const adapters = await createAdapters(validatedEnv);
         return runSymbiote<SupportedEvents, "worker">(
           {
             ...context,
@@ -132,7 +131,7 @@ export default {
 
           const config = await getDefaultConfig();
 
-          const adapters = await createAdapters();
+          const adapters = await createAdapters(validatedEnv);
 
           const appOctokit = await createAppOctokit(validatedEnv);
           const hostOctokit = await createUserOctokit(validatedPayload.client_payload.authToken);
