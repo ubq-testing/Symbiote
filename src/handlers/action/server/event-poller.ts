@@ -248,9 +248,10 @@ async function handleRouting({
 
 export async function processNotification(
   context: Context<"server.start" | "server.restart", "action">,
-  notification: Notification
+  notification: Notification,
+  route: "kernel-forwarded" | "safe-action" | "unsafe-action"
 ): Promise<void> {
-  await dispatchNotification({ context, notification });
+  await dispatchNotification({ context, notification, route });
 }
 
 /**

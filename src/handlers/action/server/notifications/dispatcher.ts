@@ -6,7 +6,8 @@ type NotificationHandlerArgs = {
   context: Context<"server.start" | "server.restart", "action">;
   notification: Notification;
   summary: NotificationSummary;
-  route: NotificationRoute;
+  route: "kernel-forwarded" | "safe-action" | "unsafe-action";
+  notificationRoute: NotificationRoute;
 };
 
 type NotificationHandler = (args: NotificationHandlerArgs) => Promise<void>;
@@ -58,22 +59,25 @@ const ASSIGN_REASONS = new Set(["assign", "assign_review_request"]);
 export async function dispatchNotification({
   context,
   notification,
+  route,
 }: {
   context: Context<"server.start" | "server.restart", "action">;
   notification: Notification;
+  route: "kernel-forwarded" | "safe-action" | "unsafe-action";
 }): Promise<void> {
   const summary = buildNotificationSummary(notification);
-  const route = determineNotificationRoute(summary);
-  const handler = notificationHandlers[route] ?? notificationHandlers.generic;
+  const notificationRoute = determineNotificationRoute(summary);
+  const handler = notificationHandlers[notificationRoute] ?? notificationHandlers.generic;
 
   context.logger.info(`[NOTIFICATIONS] Routing notification ${summary.id}`, {
     route,
+    notificationRoute,
     reason: summary.reason,
     subjectType: summary.subject.type,
     repo: summary.repository.fullName,
   });
 
-  await handler({ context, notification, summary, route });
+  await handler({ context, notification, summary, route, notificationRoute });
 }
 
 function buildNotificationSummary(notification: Notification): NotificationSummary {
@@ -262,7 +266,7 @@ function extractNumericIdentifier(url?: string | null): number | null {
 }
 
 async function handlePullRequestMention(args: NotificationHandlerArgs): Promise<void> {
-  const { context, summary } = args;
+  const { context, summary, route, notificationRoute } = args;
   const { logger, adapters } = context;
 
   const mentionContext = await fetchMentionContext(context, summary.subject.latestCommentUrl);
@@ -274,6 +278,15 @@ async function handlePullRequestMention(args: NotificationHandlerArgs): Promise<
     });
     return;
   }
+
+  let octokit;
+
+  if(route === "kernel-forwarded" || route === "safe-action") {
+    octokit = context.appOctokit;
+  } else {
+    octokit = context.hostOctokit;
+  }
+
 
   const aiRequest: MentionAssessmentRequest = {
     hostUsername: context.env.SYMBIOTE_HOST.USERNAME,
@@ -288,7 +301,7 @@ async function handlePullRequestMention(args: NotificationHandlerArgs): Promise<
     unread: summary.unread,
     createdAt: summary.createdAt ?? summary.updatedAt,
     additionalContext: buildAdditionalContext(summary, mentionContext),
-    octokit: context.hostOctokit,
+    octokit
   };
 
   const assessment = await adapters.ai.classifyMention(aiRequest);
@@ -299,7 +312,15 @@ async function handlePullRequestMention(args: NotificationHandlerArgs): Promise<
     mentionPreview: mentionContext?.body?.slice(0, 320),
   });
 
-  // TODO: translate assessment into concrete actions (draft replies, patch branches, etc.)
+  // If AI decided to respond, it may have already taken actions via tools
+  // The assessment.suggestedActions contains what it planned/intended to do
+  if (assessment.classification === "respond" && assessment.shouldAct) {
+    logger.info(`[NOTIFICATIONS][pull_request:mention] AI chose to respond autonomously`, {
+      notificationId: summary.id,
+      suggestedActions: assessment.suggestedActions,
+      confidence: assessment.confidence,
+    });
+  }
 }
 
 type MentionContextDetails = {
