@@ -38,13 +38,6 @@
         "maximum": 3600,
         "type": "number"
       },
-      "eventsPerPage": {
-        "description": "Number of events to fetch per API request (max 100).",
-        "default": 30,
-        "minimum": 1,
-        "maximum": 100,
-        "type": "number"
-      },
       "maxRuntimeHours": {
         "description": "Maximum runtime in hours before automatic restart (We always keep a safety buffer of 1 hour; so 6 = 5 hours max runtime).",
         "default": 6,
@@ -60,30 +53,40 @@
         "type": "number"
       },
       "aiConfig": {
-        "type": "object",
-        "description": "LLM provider configuration used for autonomous reasoning.",
         "default": {
           "kind": "OpenAi",
-          "model": "gpt-4o-mini",
-          "baseUrl": "https://api.openai.com/v1"
+          "model": "x-ai/grok-4.1-fast",
+          "baseUrl": "https://openrouter.ai/api/v1"
         },
+        "type": "object",
         "properties": {
           "kind": {
-            "type": "string",
-            "enum": ["OpenAi", "OpenRouter"],
-            "description": "Which provider to call."
+            "anyOf": [
+              {
+                "description": "Use OpenAI's public API.",
+                "const": "OpenAi",
+                "type": "string"
+              },
+              {
+                "description": "Use OpenRouter as a proxy/provider.",
+                "const": "OpenRouter",
+                "type": "string"
+              }
+            ]
           },
           "model": {
-            "type": "string",
             "description": "Chat/completions model identifier.",
-            "default": "gpt-4o-mini"
+            "default": "x-ai/grok-4.1-fast",
+            "examples": ["gpt-4o-mini", "o1-mini", "openai/gpt-4o-mini"],
+            "type": "string"
           },
           "baseUrl": {
-            "type": "string",
-            "description": "Base URL for the model endpoint.",
-            "default": "https://api.openai.com/v1"
+            "description": "Base URL for the LLM endpoint.",
+            "default": "https://openrouter.ai/api/v1",
+            "type": "string"
           }
-        }
+        },
+        "required": ["kind"]
       }
     }
   },
