@@ -1,6 +1,7 @@
 import { Context } from "../../../types/index";
 import { RestEndpointMethodTypes } from "@ubiquity-os/plugin-sdk/octokit";
 import { createRepoOctokit } from "../../octokit";
+import { CallbackResult } from "../../../types/callbacks";
 
 export type UserEvent = RestEndpointMethodTypes["activity"]["listPublicEventsForUser"]["response"]["data"][0];
 export type Notification = RestEndpointMethodTypes["activity"]["listNotificationsForAuthenticatedUser"]["response"]["data"][0];
@@ -181,10 +182,10 @@ async function handleRouting({
   routing: "kernel-forwarded" | "safe-action" | "unsafe-action";
   context: Context<"server.start" | "server.restart", "action">;
   event: UserEvent | undefined;
-}): Promise<void> {
+}): Promise<CallbackResult> {
   if (!event) {
     context.logger.warn(`Event is undefined, skipping`);
-    return;
+    return { status: 500, reason: "Event is undefined, skipping", content: JSON.stringify({ event, routing }) };
   }
   switch (routing) {
     case "kernel-forwarded":
@@ -197,6 +198,9 @@ async function handleRouting({
       await handleUnsafeActionEvent(context, event);
       break;
   }
+
+
+  return { status: 200, reason: "Event processed successfully", content: JSON.stringify({ event, routing }) };
 }
 
 export async function processNotification(context: Context<"server.start" | "server.restart", "action">, notification: Notification): Promise<void> {
@@ -214,7 +218,7 @@ export async function processNotification(context: Context<"server.start" | "ser
  * @param context - Action context
  * @param event - GitHub user event
  */
-export async function processEvent(context: Context<"server.start" | "server.restart", "action">, event: UserEvent): Promise<void> {
+export async function processEvent(context: Context<"server.start" | "server.restart", "action">, event: UserEvent): Promise<CallbackResult> {
   const { logger } = context;
   const [owner, repoName] = event.repo?.name?.split("/") ?? [];
   if (!owner || !repoName) {
@@ -227,13 +231,20 @@ export async function processEvent(context: Context<"server.start" | "server.res
     actor: event.actor?.login,
     createdAt: event.created_at,
   });
+  let result: CallbackResult;
 
+  const cachedEvent = await context.adapters.kv.get<UserEvent>(["event", event.id]);
   const cachedRouting = await context.adapters.kv.get<"kernel-forwarded" | "safe-action" | "unsafe-action">(["routing", owner, repoName]);
+
+  if (cachedEvent && cachedEvent.value) {
+    context.logger.info(`[EVENT-POLLER] Cache hit for event ${event.id} in ${event.repo?.name} from ${event.actor?.login}: event as ${cachedEvent.value}`);
+    return { status: 200, reason: "Event processed successfully", content: JSON.stringify(cachedEvent.value) };
+  }
+
   if (cachedRouting && cachedRouting.value) {
     context.logger.info(`[EVENT-POLLER] Cache hit for event ${event.id} in ${event.repo?.name} from ${event.actor?.login}: routing as ${cachedRouting.value}`);
-
     try {
-      return await handleRouting({
+      result = await handleRouting({
         routing: cachedRouting.value,
         context,
         event,
@@ -247,7 +258,7 @@ export async function processEvent(context: Context<"server.start" | "server.res
       const routing = await determineEventRouting(context, event);
       await context.adapters.kv.set([`routing:${owner}:${repoName}`], routing);
       context.logger.info(`[EVENT-POLLER] Cache miss for event ${event.id} in ${event.repo?.name} from ${event.actor?.login}: routing as ${routing}`);
-      return await handleRouting({
+      result = await handleRouting({
         routing,
         context,
         event,
@@ -257,6 +268,14 @@ export async function processEvent(context: Context<"server.start" | "server.res
       throw error;
     }
   }
+
+  if (!result) {
+    logger.error(`Error handling routing for event ${event.id}: result is undefined`);
+    throw new Error(`Error handling routing for event ${event.id}: result is undefined`);
+  }
+
+  await context.adapters.kv.set([`event:${event.id}`], result.content);
+  return { status: result.status, reason: result.reason, content: JSON.stringify(result.content) };
 }
 
 /**
