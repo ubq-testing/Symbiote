@@ -2,7 +2,7 @@ import { Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { Context as HonoContext } from "hono";
 import { finalizeOAuthCallback } from "./backend";
 import { renderOAuthResultPage } from "./frontend";
-import { WorkerEnv } from "../../../../types";
+import { WorkerEnv } from "../../../../types/index";
 import { createKvAdapter } from "../../../../adapters/kv";
 import { createAppOctokit } from "../../../octokit";
 

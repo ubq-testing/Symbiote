@@ -1,8 +1,8 @@
 import { createPlugin } from "@ubiquity-os/plugin-sdk";
-import { PluginSettings, pluginSettingsSchema, SupportedCustomEvents, SupportedEvents, SupportedWebhookEvents, WorkerEnv, workerEnvSchema } from "../../../../types";
+import { PluginSettings, pluginSettingsSchema, SupportedCustomEvents, SupportedEvents, SupportedWebhookEvents, WorkerEnv, workerEnvSchema } from "../../../../types/index";
 import { Manifest } from "@ubiquity-os/plugin-sdk/manifest";
 import { LogLevel, LOG_LEVEL } from "@ubiquity-os/ubiquity-os-logger";
-import { runSymbiote } from "../../../..";
+import { runSymbiote } from "../../../../index";
 import { createAdapters } from "../../../../adapters/create-adapters";
 import { PluginInputs } from "../../../../types/callbacks";
 import { Command } from "../../../../types/command";

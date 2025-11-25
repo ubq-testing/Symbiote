@@ -1,14 +1,11 @@
 import { LogLevel, Logs } from "@ubiquity-os/ubiquity-os-logger";
-import { Context, CustomContext, SupportedEvents, WorkerEnv } from "../../../../types";
-import { SupportedCustomEvents } from "../../../../types";
+import { PluginSettings, pluginSettingsSchema, SupportedCustomEvents ,Context, CustomContext, SupportedEvents, WorkerEnv } from "../../../../types/index";
 import { isCustomEventGuard } from "../../../../types/typeguards";
 import { Context as HonoContext } from "hono";
 import { validateCallbackPayload } from "../../../../utils/validate-payload";
 import { Value } from "@sinclair/typebox/value";
-import { pluginSettingsSchema } from "../../../../types";
-import { PluginSettings } from "../../../../types";
 import { CommentHandler } from "@ubiquity-os/plugin-sdk";
-import { runSymbiote } from "../../../..";
+import { runSymbiote } from "../../../../index";
 import { createAdapters } from "../../../../adapters/create-adapters";
 import { createAppOctokit, createUserOctokit } from "../../../octokit";
 
