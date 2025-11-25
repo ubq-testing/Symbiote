@@ -17,7 +17,7 @@ export async function handleSymbioteServer(
         logger.info("Symbiote server is already running");
         serverResponse = { status: 200, reason: "Symbiote server is already running" };
       } else {
-        serverResponse = await server.spawnServer();
+        serverResponse = await server.handleServerStart();
       }
       break;
     case "restart":
