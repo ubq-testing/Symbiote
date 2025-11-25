@@ -1,6 +1,7 @@
 import { Context } from "../../../../types/index";
 import type { Notification } from "../event-poller";
 import type { MentionAssessmentRequest } from "../../../../adapters/ai/adapter";
+import { createRepoOctokit } from "../../../octokit";
 
 type NotificationHandlerArgs = {
   context: Context<"server.start" | "server.restart", "action">;
@@ -282,7 +283,11 @@ async function handlePullRequestMention(args: NotificationHandlerArgs): Promise<
   let octokit;
 
   if(route === "kernel-forwarded" || route === "safe-action") {
-    octokit = context.appOctokit;
+    octokit = await createRepoOctokit({
+      env: context.env,
+      owner: summary.repository.owner ?? "",
+      repo: summary.repository.name ?? "",
+    });
   } else {
     octokit = context.hostOctokit;
   }
