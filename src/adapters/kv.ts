@@ -1,18 +1,18 @@
-import { AtomicOperation, Kv, KvCommitResult, KvConsistencyLevel, KvEntryMaybe, KvKey, KvKeyPart, KvListIterator } from "@deno/kv";
+import { AtomicOperation, Kv, KvCommitResult, KvConsistencyLevel, KvEntryMaybe, KvKey, KvKeyPart} from "@deno/kv";
 import { WorkerEnv, WorkflowEnv } from "../types/index";
 
 function isLocalOrWorkflowEnv(env: WorkflowEnv | WorkerEnv): env is WorkflowEnv & { NODE_ENV: "local" } {
   return "GITHUB_RUN_ID" in env || env.NODE_ENV === "local" || env.NODE_ENV === "development";
 }
 
-export class KvAdapter implements Kv {
-  private _kv: Kv;
-  constructor(kv: Kv) {
+export class KvAdapter {
+  private _kv: Kv | Deno.Kv;
+  constructor(kv: Kv | Deno.Kv) {
     this._kv = kv;
   }
 
-  async get<T = unknown>(key: KvKey, options?: { consistency?: KvConsistencyLevel }): Promise<KvEntryMaybe<T>> {
-    return await this._kv.get(key, options);
+  async get<T = unknown>(key: KvKey, options?: { consistency?: KvConsistencyLevel }){
+    return await this._kv.get<T>(key, options);
   }
 
   async set(key: KvKey, value: unknown): Promise<KvCommitResult> {
@@ -27,21 +27,21 @@ export class KvAdapter implements Kv {
     return this._kv.close();
   }
 
-  list<T = unknown>(options: { prefix: KvKeyPart[]; end: KvKey }): KvListIterator<T> {
+  list<T = unknown>(options: { prefix: KvKeyPart[]; end: KvKey }) {
     return this._kv.list(options);
   }
 
   watch<T extends readonly unknown[]>(
     keys: readonly [...{ [K in keyof T]: KvKey }],
     options?: { raw?: boolean | undefined }
-  ): ReadableStream<{ [K in keyof T]: KvEntryMaybe<T[K]> }> {
+  ) {
     return this._kv.watch(keys, options);
   }
 
   getMany<T extends readonly unknown[]>(
     keys: readonly [...{ [K in keyof T]: KvKey }],
     options?: { consistency?: KvConsistencyLevel }
-  ): Promise<{ [K in keyof T]: KvEntryMaybe<T[K]> }> {
+  ) {
     return this._kv.getMany(keys, options);
   }
 
@@ -49,7 +49,7 @@ export class KvAdapter implements Kv {
     return this._kv.atomic();
   }
 
-  enqueue(value: unknown, options?: { delay?: number; keysIfUndelivered?: KvKey[] }): Promise<KvCommitResult> {
+  enqueue(value: unknown, options?: { delay?: number; keysIfUndelivered?: KvKey[] }) {
     return this._kv.enqueue(value, options);
   }
 

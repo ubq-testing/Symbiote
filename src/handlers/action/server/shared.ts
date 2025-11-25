@@ -48,18 +48,25 @@ export async function runServerActionLoop({
 
   // Track last event ID to avoid processing duplicates
   let lastProcessedEventId: string | null = null;
+  let lastPollTimestamp: string | null = null;
 
   // Main server loop - poll for events at configured interval
   while (!shouldStop && !stopSignalReceived) {
     try {
       logger.info(`Polling for user events: ${username}`);
 
+      const timeSince = lastPollTimestamp ? new Date(lastPollTimestamp) : new Date(Date.now() - 1000 * 60 * 60 * 24 * 3);
+
       // Poll for user events
-      const { events, notifications } = await pollUserEvents({
+      const { events, notifications, lastPollTimestamp: newLastPollTimestamp } = await pollUserEvents({
         context,
         username,
         perPage: eventsPerPage,
+        timeSince,
+        now: new Date(Date.now()),
       });
+
+      lastPollTimestamp = newLastPollTimestamp;
 
       if (notifications.length > 0) {
         logger.info(`Found ${notifications.length} notifications, processing...`);

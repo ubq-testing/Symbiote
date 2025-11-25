@@ -6,22 +6,36 @@ import { CallbackResult } from "../../../types/callbacks";
 export type UserEvent = RestEndpointMethodTypes["activity"]["listPublicEventsForUser"]["response"]["data"][0];
 export type Notification = RestEndpointMethodTypes["activity"]["listNotificationsForAuthenticatedUser"]["response"]["data"][0];
 
+const THREE_DAYS_AGO = new Date(Date.now() - 1000 * 60 * 60 * 24 * 3);
+const NOW = new Date(Date.now());
+
 export async function pollUserEvents({
   context,
   username,
   perPage = 30,
+  timeSince = THREE_DAYS_AGO,
+  now = NOW,
 }: {
   context: Context<"server.start" | "server.restart", "action">;
   username: string;
   perPage: number;
-}): Promise<{ events: UserEvent[]; notifications: Notification[] }> {
+  timeSince: Date;
+  now: Date;
+}): Promise<{
+  events: UserEvent[];
+  notifications: Notification[];
+  lastPollTimestamp: string;
+}> {
   const { appOctokit, hostOctokit } = context;
   const events: UserEvent[] = [];
   const notifications: Notification[] = [];
+
   try {
     const publicEvents = await appOctokit.rest.activity.listPublicEventsForUser({
       username,
       per_page: perPage,
+      since: timeSince.toISOString(),
+      before: now.toISOString(),
     });
     events.push(...publicEvents.data);
   } catch (error) {
@@ -31,6 +45,10 @@ export async function pollUserEvents({
   try {
     const notificationsResponse = await hostOctokit.rest.activity.listNotificationsForAuthenticatedUser({
       per_page: perPage,
+      all: true,
+      participating: true,
+      since: timeSince.toISOString(),
+      before: now.toISOString(),
     });
     notifications.push(...notificationsResponse.data);
   } catch (error) {
@@ -41,6 +59,8 @@ export async function pollUserEvents({
     const privateEvents = await hostOctokit.rest.activity.listEventsForAuthenticatedUser({
       per_page: perPage,
       username,
+      since: timeSince.toISOString(),
+      before: now.toISOString(),
     });
     events.push(...privateEvents.data);
   } catch (error) {
@@ -51,6 +71,7 @@ export async function pollUserEvents({
   return {
     events: events.sort((a, b) => new Date(a.created_at ?? "").getTime() - new Date(b.created_at ?? "").getTime()),
     notifications: notifications.sort((a, b) => new Date(a.updated_at ?? "").getTime() - new Date(b.updated_at ?? "").getTime()),
+    lastPollTimestamp: now.toISOString(),
   };
 }
 
@@ -194,6 +215,7 @@ async function handleRouting({
     context.logger.warn(`Event is undefined, skipping`);
     return { status: 500, reason: "Event is undefined, skipping", content: JSON.stringify({ event, routing }) };
   }
+
   switch (routing) {
     case "kernel-forwarded":
       await handleKernelForwardedEvent(context, event);
@@ -206,7 +228,21 @@ async function handleRouting({
       break;
   }
 
-  return { status: 200, reason: "Event processed successfully", content: JSON.stringify({ event, routing }) };
+  return {
+    status: 200,
+    reason: "Event processed successfully",
+    content: JSON.stringify({
+      event: {
+        id: event.id,
+        type: event.type,
+        created_at: event.created_at,
+        actor: event.actor?.login,
+        repo: event.repo?.name,
+        org: event.org?.login,
+      },
+      routing,
+    }),
+  };
 }
 
 export async function processNotification(context: Context<"server.start" | "server.restart", "action">, notification: Notification): Promise<void> {
