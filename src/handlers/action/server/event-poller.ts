@@ -68,10 +68,25 @@ export async function pollUserEvents({
   }
 
   console.log(`Events: ${events.length}, Notifications: ${notifications.length}`);
+
+  // Sort events and notifications by timestamp
+  const sortedEvents = events.sort((a, b) => new Date(a.created_at ?? "").getTime() - new Date(b.created_at ?? "").getTime());
+  const sortedNotifications = notifications.sort((a, b) => new Date(a.updated_at ?? "").getTime() - new Date(b.updated_at ?? "").getTime());
+
+  // Find the most recent timestamp from all returned items
+  const eventTimestamps = sortedEvents.map(e => e.created_at).filter(Boolean);
+  const notificationTimestamps = sortedNotifications.map(n => n.updated_at).filter(Boolean);
+  const allTimestamps = [...eventTimestamps, ...notificationTimestamps];
+
+  // Use the most recent timestamp, or fall back to 'now' if no items
+  const mostRecentTimestamp = allTimestamps.length > 0
+    ? allTimestamps.sort().pop()!
+    : now.toISOString();
+
   return {
-    events: events.sort((a, b) => new Date(a.created_at ?? "").getTime() - new Date(b.created_at ?? "").getTime()),
-    notifications: notifications.sort((a, b) => new Date(a.updated_at ?? "").getTime() - new Date(b.updated_at ?? "").getTime()),
-    lastPollTimestamp: now.toISOString(),
+    events: sortedEvents,
+    notifications: sortedNotifications,
+    lastPollTimestamp: mostRecentTimestamp,
   };
 }
 
