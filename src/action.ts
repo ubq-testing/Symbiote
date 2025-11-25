@@ -3,7 +3,7 @@ import { LOG_LEVEL, LogLevel } from "@ubiquity-os/ubiquity-os-logger";
 import { runSymbiote } from "./index";
 import { pluginSettingsSchema, PluginSettings, SupportedEvents, SupportedCustomEvents, SupportedWebhookEvents } from "./types/index";
 import { WorkflowEnv, workflowEnvSchema } from "./types/env";
-import { validateEnvironment } from "./utils/validate-env";
+import { validateEnvironment } from "./utils/env";
 import { Command } from "./types/command";
 import { createAdapters } from "./adapters/create-adapters";
 import { createAppOctokit, createUserOctokit } from "./handlers/octokit";
