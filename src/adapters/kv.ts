@@ -1,4 +1,4 @@
-import { AtomicOperation, Kv, KvCommitResult, KvConsistencyLevel, KvEntryMaybe, KvKey, KvKeyPart} from "@deno/kv";
+import { AtomicOperation, Kv, KvCommitResult, KvConsistencyLevel, KvKey, KvKeyPart} from "@deno/kv";
 import { WorkerEnv, WorkflowEnv } from "../types/index";
 
 function isLocalOrWorkflowEnv(env: WorkflowEnv | WorkerEnv): env is WorkflowEnv & { NODE_ENV: "local" } {
@@ -73,6 +73,7 @@ export async function createKvAdapter(env: WorkflowEnv | WorkerEnv): Promise<KvA
   }
 
   /**
+   * TODO MOVE INTO ABOVE
    * If we're not in Deno runtime (e.g., Node.js in local dev or GitHub Actions),
    * and the environment is a local or workflow environment, we can use the DENO_KV_UUID
    * to open the KV store remotely, this way all environments can use the same KV store.
