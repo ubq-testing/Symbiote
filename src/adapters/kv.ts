@@ -64,9 +64,7 @@ export class KvAdapter implements Kv {
 
 export async function createKvAdapter(env: WorkflowEnv | WorkerEnv): Promise<KvAdapter> {
   // First check if we're in Deno runtime - if so, use the built-in KV API
-  // @ts-expect-error - Deno isn't defined without having the DenoLand extension installed or within the runtime
   if (typeof Deno !== "undefined" && Deno.openKv) {
-    // @ts-expect-error - Deno isn't defined without having the DenoLand extension installed or within the runtime
     const kv = await Deno.openKv();
     if (!kv) {
       throw new Error("Failed to open Deno KV");

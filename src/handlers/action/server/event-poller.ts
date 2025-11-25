@@ -68,7 +68,7 @@ export async function determineEventRouting(
   context: Context<"server.start" | "server.restart", "action">,
   event: UserEvent
 ): Promise<"kernel-forwarded" | "safe-action" | "unsafe-action"> {
-  const { logger, appOctokit, env } = context;
+  const { logger, appOctokit, hostOctokit, env } = context;
 
   /**
    * Extract repository information from the event which
@@ -87,38 +87,9 @@ export async function determineEventRouting(
   }
 
   const orgName = org?.login;
-
-  let isPrivate = false;
-  try {
-    const repoResponse = await appOctokit.rest.repos.get({
-      owner,
-      repo: repoName,
-    });
-
-    isPrivate = repoResponse.data.private;
-  } catch (e) {
-    logger.error(`Error checking repository private status: `, { owner, repoName, orgName });
-    isPrivate = true;
-  }
-
-  try {
-    // Attempt to get app installation - if this succeeds, app is installed
-    const appAuth = await appOctokit.rest.apps.getAuthenticated();
-    if (appAuth.data) {
-      const { slug, name: appName, owner: appOwner } = appAuth.data;
-
-      const appOwnerName = "login" in appOwner ? appOwner.login : (appOwner.name ?? "");
-      if (appOwnerName && appOwnerName.toLowerCase() === owner.toLowerCase()) {
-        logger.info(`App authentication: ${slug}`, { slug, appName, appOwnerName, appOwner });
-        return "kernel-forwarded";
-      }
-    }
-  } catch (er) {
-    logger.error(`Error checking app authentication: `, { owner, repoName, orgName });
-  }
-
-  // Check if app is installed on the repository
-  let hasApp = false;
+  let isPrivate: boolean | null | undefined;
+  let hasInstalledApp = false;
+  let installationId: number | null = null;
 
   try {
     const installations = await appOctokit.rest.apps.listInstallations();
@@ -129,7 +100,7 @@ export async function determineEventRouting(
 
     if (installation) {
       console.log(`Installation: ${installation.id}`, { installation });
-      hasApp = true;
+      installationId = installation.id;
     } else {
       console.log(`No installation found for ${owner}`, {
         installations: installations.data.map((installation) => {
@@ -144,34 +115,70 @@ export async function determineEventRouting(
     logger.error(`Error listing installations: `, { owner, repoName, orgName });
   }
 
-  try {
-    const repoOctokit = await createRepoOctokit({
-      env,
-      owner,
-      repo: repoName,
-    });
+  if (installationId) {
+    hasInstalledApp = true;
+  }
 
-    if (repoOctokit) {
-      hasApp = true;
+  if (!hasInstalledApp) {
+    try {
+      // Attempt to get app installation - if this succeeds, app is installed
+      const appAuth = await appOctokit.rest.apps.getAuthenticated();
+      if (appAuth.data) {
+        const { slug, name: appName, owner: appOwner } = appAuth.data;
+
+        const appOwnerName = "login" in appOwner ? appOwner.login : (appOwner.name ?? "");
+        if (appOwnerName && appOwnerName.toLowerCase() === owner.toLowerCase()) {
+          logger.info(`App authentication: ${slug}`, { slug, appName, appOwnerName });
+          hasInstalledApp = true;
+        }
+      }
+    } catch (er) {
+      logger.error(`Error checking app authentication: `, { owner, repoName, orgName });
+    }
+  }
+
+  try {
+    if (hasInstalledApp) {
+      const repoOctokit = await createRepoOctokit({
+        env,
+        owner,
+        repo: repoName,
+      });
+      const repoResponse = await repoOctokit.rest.repos.get({
+        owner,
+        repo: repoName,
+      });
+      isPrivate = repoResponse.data.private;
+    } else {
+      const repoResponse = await hostOctokit.rest.repos.get({
+        owner,
+        repo: repoName,
+      });
+      isPrivate = repoResponse.data.private;
     }
   } catch (e) {
-    logger.error(`Error creating repo octokit: `, { owner, repoName, orgName });
+    logger.error(`Error checking repository private status: `, { owner, repoName, orgName });
+    isPrivate = null;
   }
 
-  logger.info(`App installation check for ${owner} in ${repoName}: ${hasApp}`);
+  logger.info(`App installation check for ${owner} in ${repoName}: ${hasInstalledApp}`);
 
   // Route based on repository type and app installation
-  if (hasApp) {
+  if (hasInstalledApp) {
+    // App is installed, so the kernel may have already processed it
     logger.info(`Event ${event.id} from ${repo.name}: routing as kernel-forwarded (app installed)`);
     return "kernel-forwarded";
-  } else if (!isPrivate) {
+  } else if (isPrivate) {
+    // Private repo, so we need to use user authentication
+    logger.info(`Event ${event.id} from ${repo.name}: routing as unsafe-action (private repo)`);
+    return "unsafe-action";
+  } else if (isPrivate === false) {
+    // Public repo, so we can use app authentication
     logger.info(`Event ${event.id} from ${repo.name}: routing as safe-action (public repo)`);
     return "safe-action";
+  } else {
+    throw new Error(`Event ${event.id} from ${repo.name}: could not determine repository type`);
   }
-
-
-  logger.info(`Event ${event.id} from ${repo.name}: routing as unsafe-action (private repo)`);
-  return "unsafe-action";
 }
 
 async function handleRouting({
@@ -198,7 +205,6 @@ async function handleRouting({
       await handleUnsafeActionEvent(context, event);
       break;
   }
-
 
   return { status: 200, reason: "Event processed successfully", content: JSON.stringify({ event, routing }) };
 }
@@ -233,30 +239,16 @@ export async function processEvent(context: Context<"server.start" | "server.res
   });
   let result: CallbackResult;
 
-  const cachedEvent = await context.adapters.kv.get<UserEvent>(["event", event.id]);
-  const cachedRouting = await context.adapters.kv.get<"kernel-forwarded" | "safe-action" | "unsafe-action">(["routing", owner, repoName]);
-
-  if (cachedEvent && cachedEvent.value) {
-    context.logger.info(`[EVENT-POLLER] Cache hit for event ${event.id} in ${event.repo?.name} from ${event.actor?.login}: event as ${cachedEvent.value}`);
-    return { status: 200, reason: "Event processed successfully", content: JSON.stringify(cachedEvent.value) };
-  }
+  const cachedRouting = await context.adapters.kv.get<"kernel-forwarded" | "safe-action" | "unsafe-action">(["routing", owner, repoName, event.id]);
 
   if (cachedRouting && cachedRouting.value) {
     context.logger.info(`[EVENT-POLLER] Cache hit for event ${event.id} in ${event.repo?.name} from ${event.actor?.login}: routing as ${cachedRouting.value}`);
-    try {
-      result = await handleRouting({
-        routing: cachedRouting.value,
-        context,
-        event,
-      });
-    } catch (error) {
-      logger.error(`Error handling routing for event ${event.id}: ${error}`);
-      throw error;
-    }
+    context.logger.info(`[EVENT-POLLER] Skipping routing for event ${event.id} in ${event.repo?.name} from ${event.actor?.login}`);
+    return { status: 200, reason: "Event processed successfully", content: JSON.stringify(cachedRouting.value) };
   } else {
     try {
       const routing = await determineEventRouting(context, event);
-      await context.adapters.kv.set([`routing:${owner}:${repoName}`], routing);
+      await context.adapters.kv.set([`routing:${owner}:${repoName}:${event.id}`], routing);
       context.logger.info(`[EVENT-POLLER] Cache miss for event ${event.id} in ${event.repo?.name} from ${event.actor?.login}: routing as ${routing}`);
       result = await handleRouting({
         routing,
