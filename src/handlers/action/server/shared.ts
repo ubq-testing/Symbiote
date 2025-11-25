@@ -29,7 +29,7 @@ export async function runServerActionLoop({
 
   const runtimeCheckIntervalMs = (config.runtimeCheckIntervalMinutes ?? 60) * MINUTES_TO_MS;
   const pollIntervalMs = (config.pollIntervalSeconds ?? 60) * SECONDS_TO_MS;
-  const eventsPerPage = config.eventsPerPage ?? 30;
+  const eventsPerPage = 30;
 
   // Set up periodic runtime check
   const runtimeCheckInterval = setInterval(async () => {

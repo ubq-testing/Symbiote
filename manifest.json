@@ -58,6 +58,32 @@
         "minimum": 1,
         "maximum": 360,
         "type": "number"
+      },
+      "aiConfig": {
+        "type": "object",
+        "description": "LLM provider configuration used for autonomous reasoning.",
+        "default": {
+          "kind": "OpenAi",
+          "model": "gpt-4o-mini",
+          "baseUrl": "https://api.openai.com/v1"
+        },
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["OpenAi", "OpenRouter"],
+            "description": "Which provider to call."
+          },
+          "model": {
+            "type": "string",
+            "description": "Chat/completions model identifier.",
+            "default": "gpt-4o-mini"
+          },
+          "baseUrl": {
+            "type": "string",
+            "description": "Base URL for the model endpoint.",
+            "default": "https://api.openai.com/v1"
+          }
+        }
       }
     }
   },

@@ -2,6 +2,7 @@ import { Context } from "../../../types/index";
 import { RestEndpointMethodTypes } from "@ubiquity-os/plugin-sdk/octokit";
 import { createRepoOctokit } from "../../octokit";
 import { CallbackResult } from "../../../types/callbacks";
+import { dispatchNotification } from "./notifications/dispatcher";
 
 export type UserEvent = RestEndpointMethodTypes["activity"]["listPublicEventsForUser"]["response"]["data"][0];
 export type Notification = RestEndpointMethodTypes["activity"]["listNotificationsForAuthenticatedUser"]["response"]["data"][0];
@@ -26,20 +27,20 @@ export async function pollUserEvents({
   notifications: Notification[];
   lastPollTimestamp: string;
 }> {
-  const { appOctokit, hostOctokit } = context;
+  const { hostOctokit } = context;
   const events: UserEvent[] = [];
   const notifications: Notification[] = [];
 
   try {
-    const publicEvents = await appOctokit.rest.activity.listPublicEventsForUser({
-      username,
+    const privateEvents = await hostOctokit.rest.activity.listEventsForAuthenticatedUser({
       per_page: perPage,
+      username,
       since: timeSince.toISOString(),
       before: now.toISOString(),
     });
-    events.push(...publicEvents.data);
+    events.push(...privateEvents.data);
   } catch (error) {
-    context.logger.error(`Failed to poll public events: ${error instanceof Error ? error.message : String(error)}`);
+    context.logger.error(`Failed to poll private events: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   try {
@@ -55,18 +56,6 @@ export async function pollUserEvents({
     context.logger.error(`Failed to poll notifications: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  try {
-    const privateEvents = await hostOctokit.rest.activity.listEventsForAuthenticatedUser({
-      per_page: perPage,
-      username,
-      since: timeSince.toISOString(),
-      before: now.toISOString(),
-    });
-    events.push(...privateEvents.data);
-  } catch (error) {
-    context.logger.error(`Failed to poll private events: ${error instanceof Error ? error.message : String(error)}`);
-  }
-
   console.log(`Events: ${events.length}, Notifications: ${notifications.length}`);
 
   // Sort events and notifications by timestamp
@@ -74,14 +63,12 @@ export async function pollUserEvents({
   const sortedNotifications = notifications.sort((a, b) => new Date(a.updated_at ?? "").getTime() - new Date(b.updated_at ?? "").getTime());
 
   // Find the most recent timestamp from all returned items
-  const eventTimestamps = sortedEvents.map(e => e.created_at).filter(Boolean);
-  const notificationTimestamps = sortedNotifications.map(n => n.updated_at).filter(Boolean);
+  const eventTimestamps = sortedEvents.map((e) => e.created_at).filter(Boolean);
+  const notificationTimestamps = sortedNotifications.map((n) => n.updated_at).filter(Boolean);
   const allTimestamps = [...eventTimestamps, ...notificationTimestamps];
 
   // Use the most recent timestamp, or fall back to 'now' if no items
-  const mostRecentTimestamp = allTimestamps.length > 0
-    ? allTimestamps.sort().pop()!
-    : now.toISOString();
+  const mostRecentTimestamp = allTimestamps.length > 0 ? allTimestamps.sort().pop()! : now.toISOString();
 
   return {
     events: sortedEvents,
@@ -135,7 +122,6 @@ export async function determineEventRouting(
     let installation = loginInstallation || namedInstallation;
 
     if (installation) {
-      console.log(`Installation: ${installation.id}`, { installation });
       installationId = installation.id;
     } else {
       console.log(`No installation found for ${owner}`, {
@@ -260,13 +246,11 @@ async function handleRouting({
   };
 }
 
-export async function processNotification(context: Context<"server.start" | "server.restart", "action">, notification: Notification): Promise<void> {
-  const { logger } = context;
-  logger.info(`Processing notification: ${notification.id}`, {
-    notificationId: notification.id,
-    notification,
-  });
-  // TODO: Process notification
+export async function processNotification(
+  context: Context<"server.start" | "server.restart", "action">,
+  notification: Notification
+): Promise<void> {
+  await dispatchNotification({ context, notification });
 }
 
 /**

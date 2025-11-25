@@ -33,7 +33,7 @@ jobs:
       LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
       DENO_KV_UUID: ${{ secrets.DENO_KV_UUID }}
       DENO_KV_ACCESS_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
-      
+      AI_API_KEY: ${{ secrets.AI_API_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +48,6 @@ jobs:
           KERNEL_PUBLIC_KEY: ${{ secrets.KERNEL_PUBLIC_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PLUGIN_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
           DENO_KV_UUID: ${{ secrets.DENO_KV_UUID }}
           DENO_KV_ACCESS_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
@@ -58,3 +57,4 @@ jobs:
           WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
           WORKER_URL: ${{ secrets.WORKER_URL }}
           NODE_ENV: ${{ secrets.NODE_ENV }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}

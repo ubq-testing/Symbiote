@@ -17,12 +17,6 @@ export const pluginSettingsSchema = T.Object(
       minimum: 10,
       maximum: 3600,
     }),
-    eventsPerPage: T.Number({
-      description: "Number of events to fetch per API request (max 100).",
-      default: 30,
-      minimum: 1,
-      maximum: 100,
-    }),
     // Runtime management configuration
     maxRuntimeHours: T.Number({
       description: "Maximum runtime in hours before automatic restart (We always keep a safety buffer of 1 hour; so 6 = 5 hours max runtime).",
@@ -36,6 +30,31 @@ export const pluginSettingsSchema = T.Object(
       minimum: 1,
       maximum: 360,
     }),
+    aiConfig: T.Object(
+      {
+        kind: T.Union([
+          T.Literal("OpenAi", { description: "Use OpenAI's public API." }),
+          T.Literal("OpenRouter", { description: "Use OpenRouter as a proxy/provider." }),
+        ]),
+        model: T.String({
+          description: "Chat/completions model identifier.",
+          default: "x-ai/grok-4.1-fast",
+          examples: ["gpt-4o-mini", "o1-mini", "openai/gpt-4o-mini"],
+        }),
+        baseUrl: T.String({
+          description: "Base URL for the LLM endpoint.",
+          default: "https://openrouter.ai/api/v1",
+
+        }),
+      },
+      {
+        default: {
+          kind: "OpenAi",
+          model: "x-ai/grok-4.1-fast",
+          baseUrl: "https://openrouter.ai/api/v1",
+        },
+      }
+    ),
   },
   { default: {} }
 );

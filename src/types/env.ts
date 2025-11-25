@@ -50,6 +50,10 @@ const NODE_ENV = {
   LOCAL: "local",
 } as const;
 
+
+const openRouterApiKeySchema = T.String({ minLength: 1 });
+const openAiApiKeySchema = T.String({ minLength: 1 });
+
 const sharedSchema = T.Object({
   SYMBIOTE_HOST: T.Transform(T.Union([symbioteHostSchema, T.String()]))
     .Decode((value) => {
@@ -78,6 +82,7 @@ const sharedSchema = T.Object({
     description: "A shared secret between the worker and the action."
   }),
   NODE_ENV: T.Optional(T.Enum(NODE_ENV, { default: NODE_ENV.DEVELOPMENT })),
+  AI_API_KEY: T.Union([openRouterApiKeySchema, openAiApiKeySchema], { default: openAiApiKeySchema }),
 });
 
 export const workerEnvSchema = sharedSchema;

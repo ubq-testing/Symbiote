@@ -62,7 +62,7 @@ export default {
 
     const honoApp = createPlugin<PluginSettings, WorkerEnv, Command, SupportedWebhookEvents & SupportedCustomEvents>(
       async (context) => {
-        const adapters = await createAdapters(validatedEnv);
+        const adapters = await createAdapters(validatedEnv, context.config);
         return runSymbiote<SupportedEvents, "worker">(
           {
             ...context,
@@ -124,14 +124,12 @@ export default {
            * TODO: Implement proper config fetching/merging from plugin settings if needed.
            */
           async function getDefaultConfig(): Promise<PluginSettings> {
-            return {
-              executionBranch: "development",
-            } as PluginSettings;
+            return Value.Default(pluginSettingsSchema, {}) as PluginSettings;
           }
 
           const config = await getDefaultConfig();
 
-          const adapters = await createAdapters(validatedEnv);
+          const adapters = await createAdapters(validatedEnv, config);
 
           const appOctokit = await createAppOctokit(validatedEnv);
           const hostOctokit = await createUserOctokit(validatedPayload.client_payload.authToken);

@@ -19,7 +19,7 @@ async function runAction() {
             SupportedWebhookEvents & SupportedCustomEvents
         >(
             async(context) => {
-                const adapters = await createAdapters(context.env);
+                const adapters = await createAdapters(context.env, context.config);
                 return runSymbiote<SupportedEvents, "action">({
                     ...context,
                     appOctokit: await createAppOctokit(context.env),
