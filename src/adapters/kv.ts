@@ -1,4 +1,4 @@
-import { openKv, AtomicOperation, Kv, KvCommitResult, KvConsistencyLevel, KvEntryMaybe, KvKey, KvKeyPart, KvListIterator } from "@deno/kv";
+import { AtomicOperation, Kv, KvCommitResult, KvConsistencyLevel, KvEntryMaybe, KvKey, KvKeyPart, KvListIterator } from "@deno/kv";
 import { WorkerEnv, WorkflowEnv } from "../types/index";
 
 function isLocalOrWorkflowEnv(env: WorkflowEnv | WorkerEnv): env is WorkflowEnv & { NODE_ENV: "local" } {
@@ -63,23 +63,26 @@ export class KvAdapter implements Kv {
 }
 
 export async function createKvAdapter(env: WorkflowEnv | WorkerEnv): Promise<KvAdapter> {
+  // First check if we're in Deno runtime - if so, use the built-in KV API
+  // @ts-expect-error - Deno isn't defined without having the DenoLand extension installed or within the runtime
+  if (typeof Deno !== "undefined" && Deno.openKv) {
+    // @ts-expect-error - Deno isn't defined without having the DenoLand extension installed or within the runtime
+    const kv = await Deno.openKv();
+    if (!kv) {
+      throw new Error("Failed to open Deno KV");
+    }
+    return new KvAdapter(kv);
+  }
+
   /**
-   * If the environment is a local or workflow environment, we can use the DENO_KV_UUID to open the KV store
-   * remotely, this way all environments can use the same KV store.
+   * If we're not in Deno runtime (e.g., Node.js in local dev or GitHub Actions),
+   * and the environment is a local or workflow environment, we can use the DENO_KV_UUID
+   * to open the KV store remotely, this way all environments can use the same KV store.
    */
   if (isLocalOrWorkflowEnv(env)) {
+    const { openKv } = await import("@deno/kv");
     const { DENO_KV_UUID } = env;
     return new KvAdapter(await openKv(`https://api.deno.com/databases/${DENO_KV_UUID}/connect`));
-  } else {
-    // @ts-expect-error - Deno isn't defined without having the DenoLand extension installed or within the runtime
-    if (typeof Deno !== "undefined" && Deno.openKv) {
-      // @ts-expect-error - Deno isn't defined without having the DenoLand extension installed or within the runtime
-      const kv = await Deno.openKv();
-      if (!kv) {
-        throw new Error("Failed to open Deno KV");
-      }
-      return new KvAdapter(kv);
-    }
   }
 
   throw new Error("KV store is not available");
