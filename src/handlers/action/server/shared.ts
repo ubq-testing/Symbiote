@@ -14,14 +14,12 @@ export async function runServerActionLoop({
   context,
   runtimeTracker,
   sessionId,
-}:
-{
-  context: Context<"server.start" | "server.restart", "action">,
-  runtimeTracker: ReturnType<typeof createRuntimeTracker>,
-  sessionId: string,
-}
-): Promise<void> {
-  const { logger, env, appOctokit, hostOctokit, config,  } = context;
+}: {
+  context: Context<"server.start" | "server.restart", "action">;
+  runtimeTracker: ReturnType<typeof createRuntimeTracker>;
+  sessionId: string;
+}): Promise<void> {
+  const { logger, env, config } = context;
   let shouldStop = false;
   let stopSignalReceived = false;
 
@@ -55,9 +53,9 @@ export async function runServerActionLoop({
   while (!shouldStop && !stopSignalReceived) {
     try {
       logger.info(`Polling for user events: ${username}`);
-      
+
       // Poll for user events
-      const {events, notifications} = await pollUserEvents({
+      const { events, notifications } = await pollUserEvents({
         context,
         username,
         perPage: eventsPerPage,
@@ -106,10 +104,7 @@ export async function runServerActionLoop({
 /**
  * Sends restart callback to worker and waits for confirmation
  */
-async function initiateRestart(
-  context: Context<"server.start" | "server.restart", "action">,
-  sessionId: string,
-): Promise<void> {
+async function initiateRestart(context: Context<"server.start" | "server.restart", "action">, sessionId: string): Promise<void> {
   const { logger, env, config } = context;
   const { WORKER_URL, WORKER_SECRET } = env;
 
@@ -142,7 +137,7 @@ async function initiateRestart(
           headers: {
             "X-GitHub-Event": "server.restart",
             "Content-Type": "application/json",
-            "Authorization": `Bearer ${WORKER_SECRET}`,
+            Authorization: `Bearer ${WORKER_SECRET}`,
           },
           body: JSON.stringify({
             action: "server.restart",
@@ -157,9 +152,7 @@ async function initiateRestart(
             },
           }),
         }),
-        new Promise<Response>((_, reject) =>
-          setTimeout(() => reject(new Error("Timeout")), restartTimeoutMs)
-        ),
+        new Promise<Response>((_, reject) => setTimeout(() => reject(new Error("Timeout")), restartTimeoutMs)),
       ]);
 
       if (response.ok) {

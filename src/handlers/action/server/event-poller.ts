@@ -14,31 +14,43 @@ export async function pollUserEvents({
   username: string;
   perPage: number;
 }): Promise<{ events: UserEvent[]; notifications: Notification[] }> {
-  const { appOctokit, hostOctokit, env } = context;
+  const { appOctokit, hostOctokit } = context;
+  const events: UserEvent[] = [];
+  const notifications: Notification[] = [];
   try {
     const publicEvents = await appOctokit.rest.activity.listPublicEventsForUser({
       username,
       per_page: perPage,
     });
+    events.push(...publicEvents.data);
+  } catch (error) {
+    context.logger.error(`Failed to poll public events: ${error instanceof Error ? error.message : String(error)}`);
+  }
 
-    const notifications = await hostOctokit.rest.activity.listNotificationsForAuthenticatedUser({
+  try {
+    const notificationsResponse = await hostOctokit.rest.activity.listNotificationsForAuthenticatedUser({
       per_page: perPage,
     });
+    notifications.push(...notificationsResponse.data);
+  } catch (error) {
+    context.logger.error(`Failed to poll notifications: ${error instanceof Error ? error.message : String(error)}`);
+  }
 
+  try {
     const privateEvents = await hostOctokit.rest.activity.listEventsForAuthenticatedUser({
       per_page: perPage,
       username,
     });
-
-    const events = [...publicEvents.data, ...privateEvents.data];
-
-    return {
-      events: events.sort((a, b) => new Date(a.created_at ?? "").getTime() - new Date(b.created_at ?? "").getTime()),
-      notifications: notifications.data.sort((a, b) => new Date(a.updated_at ?? "").getTime() - new Date(b.updated_at ?? "").getTime()),
-    };
+    events.push(...privateEvents.data);
   } catch (error) {
-    throw new Error(`Failed to poll user events: ${error instanceof Error ? error.message : String(error)}`);
+    context.logger.error(`Failed to poll private events: ${error instanceof Error ? error.message : String(error)}`);
   }
+
+  console.log(`Events: ${events.length}, Notifications: ${notifications.length}`);
+  return {
+    events: events.sort((a, b) => new Date(a.created_at ?? "").getTime() - new Date(b.created_at ?? "").getTime()),
+    notifications: notifications.sort((a, b) => new Date(a.updated_at ?? "").getTime() - new Date(b.updated_at ?? "").getTime()),
+  };
 }
 
 /**
@@ -55,7 +67,7 @@ export async function determineEventRouting(
   context: Context<"server.start" | "server.restart", "action">,
   event: UserEvent
 ): Promise<"kernel-forwarded" | "safe-action" | "unsafe-action"> {
-  const { logger, appOctokit, hostOctokit, env } = context;
+  const { logger, appOctokit, env } = context;
 
   /**
    * Extract repository information from the event which
@@ -76,6 +88,16 @@ export async function determineEventRouting(
   const orgName = org?.login;
 
   try {
+    // Attempt to get app installation - if this succeeds, app is installed
+    const appAuth = await appOctokit.rest.apps.getAuthenticated();
+    if (appAuth.data) {
+      logger.info(`App authentication: ${appAuth.data.id}`, { appAuth });
+    }
+  } catch (er) {
+    logger.error(`Error checking app authentication: `, { owner, repoName, orgName });
+  }
+
+  try {
     // Check if repository is private
     const repoResponse = await appOctokit.rest.repos.get({
       owner,
@@ -83,16 +105,6 @@ export async function determineEventRouting(
     });
 
     const isPrivate = repoResponse.data.private;
-
-    try {
-      // Attempt to get app installation - if this succeeds, app is installed
-      const appAuth = await appOctokit.rest.apps.getAuthenticated();
-      if (appAuth.data) {
-        logger.info(`App authentication: ${appAuth.data.id}`, { appAuth });
-      }
-    } catch (er) {
-      logger.error(`Error checking app authentication: `, { owner, repoName, orgName });
-    }
 
     // Check if app is installed on the repository
     let hasApp = false;
@@ -103,13 +115,37 @@ export async function determineEventRouting(
         repo: repoName,
       });
 
-      if(repoOctokit) {
+      if (repoOctokit) {
         hasApp = true;
       }
-
     } catch (e) {
-      logger.error(`Error checking app installation: `, { owner, repoName, orgName });
+      logger.error(`Error creating repo octokit: `, { owner, repoName, orgName });
     }
+
+    try {
+      const installations = await appOctokit.rest.apps.listInstallations();
+      const loginInstallation = installations.data.find((installation) => installation.account?.login.toLowerCase() === owner.toLowerCase());
+      const namedInstallation = installations.data.find((installation) => installation.account?.name?.toLowerCase() === owner.toLowerCase());
+
+      let installation = loginInstallation || namedInstallation;
+
+      if (installation) {
+        console.log(`Installation: ${installation.id}`, { installation });
+        hasApp = true;
+      } else {
+        console.log(`No installation found for ${owner}`, {
+          installations: installations.data.map((installation) => {
+            return {
+              id: installation.id,
+              account: installation.account?.login,
+            };
+          }),
+        });
+      }
+    } catch (e) {
+      logger.error(`Error listing installations: `, { owner, repoName, orgName });
+    }
+
     logger.info(`App installation check for ${owner} in ${repoName}: ${hasApp}`);
 
     // Route based on repository type and app installation
