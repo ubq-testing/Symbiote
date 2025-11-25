@@ -31,7 +31,7 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PLUGIN_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
-      DENO_KV_URL: ${{ secrets.DENO_KV_URL }}
+      DENO_KV_UUID: ${{ secrets.DENO_KV_UUID }}
       DENO_KV_ACCESS_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
       
 
@@ -49,7 +49,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PLUGIN_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
-          DENO_KV_URL: ${{ secrets.DENO_KV_URL }}
+          DENO_KV_UUID: ${{ secrets.DENO_KV_UUID }}
           DENO_KV_ACCESS_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
           APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
           APP_ID: ${{ secrets.APP_ID }}

@@ -101,5 +101,13 @@ export const workflowEnvSchema = T.Composite([sharedSchema, T.Object({
     minLength: 1,
     description: "The ID of the GitHub workflow run."
   }),
+  DENO_KV_UUID: T.String({
+    minLength: 1,
+    description: "The UUID of the DENO_KV_URL."
+  }),
+  DENO_KV_ACCESS_TOKEN: T.String({
+    minLength: 1,
+    description: "The access token of the DENO_KV_URL."
+  }),
 })]);
 export type WorkflowEnv = StaticDecode<typeof workflowEnvSchema>;

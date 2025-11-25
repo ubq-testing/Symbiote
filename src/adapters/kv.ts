@@ -1,4 +1,9 @@
-import { AtomicOperation, Kv, KvCommitResult, KvConsistencyLevel, KvEntryMaybe, KvKey, KvKeyPart, KvListIterator } from "@deno/kv";
+import { openKv, AtomicOperation, Kv, KvCommitResult, KvConsistencyLevel, KvEntryMaybe, KvKey, KvKeyPart, KvListIterator } from "@deno/kv";
+import { WorkerEnv, WorkflowEnv } from "../types";
+
+function isLocalOrWorkflowEnv(env: WorkflowEnv | WorkerEnv): env is WorkflowEnv & { NODE_ENV: "local" } {
+  return "GITHUB_RUN_ID" in env || env.NODE_ENV === "local";
+}
 
 export class KvAdapter implements Kv {
   private _kv: Kv;
@@ -6,7 +11,7 @@ export class KvAdapter implements Kv {
     this._kv = kv;
   }
 
-  async get<T = unknown>(key: KvKey, options?: { consistency?: KvConsistencyLevel; }): Promise<KvEntryMaybe<T>> {
+  async get<T = unknown>(key: KvKey, options?: { consistency?: KvConsistencyLevel }): Promise<KvEntryMaybe<T>> {
     return await this._kv.get(key, options);
   }
 
@@ -23,27 +28,33 @@ export class KvAdapter implements Kv {
   }
 
   list<T = unknown>(options: { prefix: KvKeyPart[]; end: KvKey }): KvListIterator<T> {
-    return this._kv.list(options)
+    return this._kv.list(options);
   }
 
-  watch<T extends readonly unknown[]>(keys: readonly [...{ [K in keyof T]: KvKey; }], options?: { raw?: boolean | undefined; }): ReadableStream<{ [K in keyof T]: KvEntryMaybe<T[K]>; }> {
+  watch<T extends readonly unknown[]>(
+    keys: readonly [...{ [K in keyof T]: KvKey }],
+    options?: { raw?: boolean | undefined }
+  ): ReadableStream<{ [K in keyof T]: KvEntryMaybe<T[K]> }> {
     return this._kv.watch(keys, options);
   }
 
-  getMany<T extends readonly unknown[]>(keys: readonly [...{ [K in keyof T]: KvKey; }], options?: { consistency?: KvConsistencyLevel; }): Promise<{ [K in keyof T]: KvEntryMaybe<T[K]>; }> {
-      return this._kv.getMany(keys, options);
+  getMany<T extends readonly unknown[]>(
+    keys: readonly [...{ [K in keyof T]: KvKey }],
+    options?: { consistency?: KvConsistencyLevel }
+  ): Promise<{ [K in keyof T]: KvEntryMaybe<T[K]> }> {
+    return this._kv.getMany(keys, options);
   }
 
   atomic(): AtomicOperation {
-      return this._kv.atomic();
+    return this._kv.atomic();
   }
 
-  enqueue(value: unknown, options?: { delay?: number; keysIfUndelivered?: KvKey[]; }): Promise<KvCommitResult> {
-      return this._kv.enqueue(value, options);
+  enqueue(value: unknown, options?: { delay?: number; keysIfUndelivered?: KvKey[] }): Promise<KvCommitResult> {
+    return this._kv.enqueue(value, options);
   }
 
   listenQueue(handler: (value: unknown) => Promise<void> | void): Promise<void> {
-      return this._kv.listenQueue(handler);
+    return this._kv.listenQueue(handler);
   }
 
   [Symbol.dispose](): void {
@@ -51,15 +62,24 @@ export class KvAdapter implements Kv {
   }
 }
 
-export async function createKvAdapter(): Promise<KvAdapter> {
-  // @ts-expect-error - Deno isn't defined without having the DenoLand extension installed or within the runtime
-  if (typeof Deno !== "undefined" && Deno.openKv) {
+export async function createKvAdapter(env: WorkflowEnv | WorkerEnv): Promise<KvAdapter> {
+  /**
+   * If the environment is a local or workflow environment, we can use the DENO_KV_UUID to open the KV store
+   * remotely, this way all environments can use the same KV store.
+   */
+  if (isLocalOrWorkflowEnv(env)) {
+    const { DENO_KV_UUID } = env;
+    return new KvAdapter(await openKv(`https://api.deno.com/databases/${DENO_KV_UUID}/connect`));
+  } else {
     // @ts-expect-error - Deno isn't defined without having the DenoLand extension installed or within the runtime
-    const kv = await Deno.openKv();
-    if (!kv) {
-      throw new Error("Failed to open Deno KV");
+    if (typeof Deno !== "undefined" && Deno.openKv) {
+      // @ts-expect-error - Deno isn't defined without having the DenoLand extension installed or within the runtime
+      const kv = await Deno.openKv();
+      if (!kv) {
+        throw new Error("Failed to open Deno KV");
+      }
+      return new KvAdapter(kv);
     }
-    return new KvAdapter(kv);
   }
 
   throw new Error("KV store is not available");
