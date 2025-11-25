@@ -34,6 +34,7 @@ jobs:
       DENO_KV_UUID: ${{ secrets.DENO_KV_UUID }}
       DENO_KV_ACCESS_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
       AI_API_KEY: ${{ secrets.AI_API_KEY }}
+      OAUTH: ${{ secrets.OAUTH }}
 
     steps:
       - uses: actions/checkout@v4
@@ -58,3 +59,4 @@ jobs:
           WORKER_URL: ${{ secrets.WORKER_URL }}
           NODE_ENV: ${{ secrets.NODE_ENV }}
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          OAUTH: ${{ secrets.OAUTH }}

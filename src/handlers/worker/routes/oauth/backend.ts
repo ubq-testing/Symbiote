@@ -2,6 +2,7 @@ import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { KvAdapter } from "../../../../adapters/kv";
 import { WorkerEnv } from "../../../../types/env";
+import { createRepoOctokit } from "../../../octokit";
 
 const TOKEN_KEY_PREFIX = ["oauth", "token"];
 const STATE_KEY_PREFIX = ["oauth", "state"];
@@ -148,7 +149,13 @@ export async function finalizeOAuthCallback({
     "Symbiote can now act on your behalf. Run `/symbiote start` to begin or wait for the worker to respond to the previous command.",
   ].join("\n\n");
 
-  await appOctokit.rest.issues.createComment({
+  const repoOctokit = await createRepoOctokit({
+    env,
+    owner: pending.owner,
+    repo: pending.repo,
+  });
+
+  await repoOctokit.rest.issues.createComment({
     owner: pending.owner,
     repo: pending.repo,
     issue_number: pending.issueNumber,
