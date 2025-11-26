@@ -1,279 +1,35 @@
 import OpenAI from "openai";
-import type { ChatCompletionMessageParam, ChatCompletionTool } from "openai/resources/chat/completions";
+import type { ChatCompletionMessage, ChatCompletionMessageParam, ChatCompletionTool } from "openai/resources/chat/completions";
 import { WorkerEnv, WorkflowEnv } from "../../types/env";
 import { PluginSettings } from "../../types/plugin-input";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
+import { GITHUB_READ_ONLY_TOOLS, GITHUB_TOOLS } from "./tools";
+import { MENTION_CLASSIFICATION_SYSTEM_PROMPT } from "./prompts/mention-classification";
+import { SUGGESTED_ACTIONS_SYSTEM_PROMPT } from "./prompts/suggested-action-execution";
+import { formatList } from "./prompts/shared";
+import { MentionAssessmentRequest, MentionAssessmentResponse, SuggestedActionsResponse, MentionPriority } from "./prompts/types";
 
 type SymbioteEnv = WorkerEnv | WorkflowEnv;
 
-export interface MentionAssessmentRequest {
-  hostUsername: string;
-  notificationReason: string;
-  notificationType: string;
-  repoFullName?: string | null;
-  subjectTitle?: string | null;
-  subjectUrl?: string | null;
-  latestCommentUrl?: string | null;
-  mentionAuthor?: string | null;
-  mentionText?: string | null;
-  unread: boolean;
-  createdAt?: string;
-  additionalContext?: string[];
-  octokit: InstanceType<typeof customOctokit>;
-}
-
-export type MentionPriority = "low" | "medium" | "high";
-
-export interface MentionAssessmentResponse {
-  shouldAct: boolean;
-  priority: MentionPriority;
-  confidence: number;
-  reason: string;
-  suggestedActions: string[];
-  classification: "respond" | "investigate" | "ignore";
-}
-
-// GitHub Tool Definitions
-const GITHUB_TOOLS: ChatCompletionTool[] = [
-  // Read-only tools for gathering information
-  {
-    type: "function",
-    function: {
-      name: "fetch_pull_request_details",
-      description: "Fetch detailed information about a pull request including title, description, status, and recent commits",
-      parameters: {
-        type: "object",
-        properties: {
-          owner: { type: "string", description: "Repository owner" },
-          repo: { type: "string", description: "Repository name" },
-          pull_number: { type: "number", description: "Pull request number" },
-        },
-        required: ["owner", "repo", "pull_number"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "fetch_issue_details",
-      description: "Fetch detailed information about an issue including title, description, and comments",
-      parameters: {
-        type: "object",
-        properties: {
-          owner: { type: "string", description: "Repository owner" },
-          repo: { type: "string", description: "Repository name" },
-          issue_number: { type: "number", description: "Issue number" },
-        },
-        required: ["owner", "repo", "issue_number"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "fetch_recent_comments",
-      description: "Fetch recent comments from a pull request or issue",
-      parameters: {
-        type: "object",
-        properties: {
-          owner: { type: "string", description: "Repository owner" },
-          repo: { type: "string", description: "Repository name" },
-          number: { type: "number", description: "Pull request or issue number" },
-          type: { type: "string", enum: ["pull_request", "issue"], description: "Type of thread" },
-          limit: { type: "number", description: "Maximum number of comments to fetch", default: 10 },
-        },
-        required: ["owner", "repo", "number", "type"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "fetch_commit_details",
-      description: "Fetch details about a specific commit",
-      parameters: {
-        type: "object",
-        properties: {
-          owner: { type: "string", description: "Repository owner" },
-          repo: { type: "string", description: "Repository name" },
-          commit_sha: { type: "string", description: "Commit SHA" },
-        },
-        required: ["owner", "repo", "commit_sha"],
-      },
-    },
-  },
-
-  // Action tools for performing operations
-  {
-    type: "function",
-    function: {
-      name: "create_pull_request",
-      description: "Create a new pull request",
-      parameters: {
-        type: "object",
-        properties: {
-          owner: { type: "string", description: "Repository owner" },
-          repo: { type: "string", description: "Repository name" },
-          title: { type: "string", description: "Pull request title" },
-          head: { type: "string", description: "The name of the branch where your changes are implemented" },
-          base: { type: "string", description: "The name of the branch you want the changes pulled into", default: "main" },
-          body: { type: "string", description: "The contents of the pull request" },
-          draft: { type: "boolean", description: "Whether to create the pull request as a draft", default: false },
-        },
-        required: ["owner", "repo", "title", "head", "base"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "create_issue",
-      description: "Create a new issue",
-      parameters: {
-        type: "object",
-        properties: {
-          owner: { type: "string", description: "Repository owner" },
-          repo: { type: "string", description: "Repository name" },
-          title: { type: "string", description: "Issue title" },
-          body: { type: "string", description: "Issue body/description" },
-          labels: { type: "array", items: { type: "string" }, description: "Array of label names to add to the issue" },
-          assignees: { type: "array", items: { type: "string" }, description: "Array of usernames to assign to the issue" },
-        },
-        required: ["owner", "repo", "title"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "create_comment",
-      description: "Create a new comment on an issue or pull request",
-      parameters: {
-        type: "object",
-        properties: {
-          owner: { type: "string", description: "Repository owner" },
-          repo: { type: "string", description: "Repository name" },
-          issue_number: { type: "number", description: "Issue or pull request number" },
-          body: { type: "string", description: "Comment body" },
-        },
-        required: ["owner", "repo", "issue_number", "body"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "create_review",
-      description: "Create a review on a pull request",
-      parameters: {
-        type: "object",
-        properties: {
-          owner: { type: "string", description: "Repository owner" },
-          repo: { type: "string", description: "Repository name" },
-          pull_number: { type: "number", description: "Pull request number" },
-          body: { type: "string", description: "Review body" },
-          event: { type: "string", enum: ["APPROVE", "REQUEST_CHANGES", "COMMENT"], description: "Review action", default: "COMMENT" },
-          comments: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                path: { type: "string", description: "File path for the comment" },
-                position: { type: "number", description: "Line position for the comment" },
-                body: { type: "string", description: "Comment body" },
-              },
-              required: ["path", "position", "body"],
-            },
-            description: "Optional review comments on specific lines",
-          },
-        },
-        required: ["owner", "repo", "pull_number"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "update_pull_request",
-      description: "Update an existing pull request",
-      parameters: {
-        type: "object",
-        properties: {
-          owner: { type: "string", description: "Repository owner" },
-          repo: { type: "string", description: "Repository name" },
-          pull_number: { type: "number", description: "Pull request number" },
-          title: { type: "string", description: "New title for the pull request" },
-          body: { type: "string", description: "New body for the pull request" },
-          state: { type: "string", enum: ["open", "closed"], description: "New state for the pull request" },
-          base: { type: "string", description: "Change the base branch" },
-        },
-        required: ["owner", "repo", "pull_number"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "update_issue",
-      description: "Update an existing issue",
-      parameters: {
-        type: "object",
-        properties: {
-          owner: { type: "string", description: "Repository owner" },
-          repo: { type: "string", description: "Repository name" },
-          issue_number: { type: "number", description: "Issue number" },
-          title: { type: "string", description: "New title for the issue" },
-          body: { type: "string", description: "New body for the issue" },
-          state: { type: "string", enum: ["open", "closed"], description: "New state for the issue" },
-          labels: { type: "array", items: { type: "string" }, description: "Replace all labels with this array" },
-          assignees: { type: "array", items: { type: "string" }, description: "Replace all assignees with this array" },
-        },
-        required: ["owner", "repo", "issue_number"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "update_comment",
-      description: "Update an existing comment",
-      parameters: {
-        type: "object",
-        properties: {
-          owner: { type: "string", description: "Repository owner" },
-          repo: { type: "string", description: "Repository name" },
-          comment_id: { type: "number", description: "Comment ID" },
-          body: { type: "string", description: "New comment body" },
-        },
-        required: ["owner", "repo", "comment_id", "body"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "add_reaction",
-      description: "Add a reaction emoji to a comment, issue, or pull request",
-      parameters: {
-        type: "object",
-        properties: {
-          owner: { type: "string", description: "Repository owner" },
-          repo: { type: "string", description: "Repository name" },
-          subject_id: { type: "number", description: "ID of the issue, pull request, or comment" },
-          content: {
-            type: "string",
-            enum: ["+1", "-1", "laugh", "confused", "heart", "hooray", "rocket", "eyes"],
-            description: "Reaction emoji content"
-          },
-        },
-        required: ["owner", "repo", "subject_id", "content"],
-      },
-    },
-  },
-];
-
 export interface AiAdapter {
-  classifyMention(request: MentionAssessmentRequest): Promise<MentionAssessmentResponse>;
+  classifyMention(request: MentionAssessmentRequest): Promise<{
+    messages: ChatCompletionMessageParam[];
+    assessment: MentionAssessmentResponse;
+  }>;
+  executeSuggestedActions({
+    request,
+    octokit,
+    assessment,
+    existingMessages,
+  }: {
+    request: MentionAssessmentRequest;
+    octokit: InstanceType<typeof customOctokit>;
+    assessment: MentionAssessmentResponse;
+    existingMessages: ChatCompletionMessageParam[];
+  }): Promise<{
+    messages: ChatCompletionMessageParam[];
+    response: SuggestedActionsResponse;
+  }>;
 }
 
 const DEFAULT_ASSESSMENT: MentionAssessmentResponse = {
@@ -283,6 +39,11 @@ const DEFAULT_ASSESSMENT: MentionAssessmentResponse = {
   reason: "No automated assessment available.",
   suggestedActions: [],
   classification: "ignore",
+};
+
+const DEFAULT_SUGGESTED_ACTIONS_RESPONSE: SuggestedActionsResponse = {
+  finalResponse: "No automated response available.",
+  results: [],
 };
 
 export async function createAiAdapter(env: SymbioteEnv, config: PluginSettings): Promise<AiAdapter | null> {
@@ -296,23 +57,24 @@ export async function createAiAdapter(env: SymbioteEnv, config: PluginSettings):
     baseURL: aiConfig.baseUrl,
   });
 
-  async function classifyMention(request: MentionAssessmentRequest): Promise<MentionAssessmentResponse> {
+  async function classifyMention(request: MentionAssessmentRequest): Promise<{
+    messages: ChatCompletionMessageParam[];
+    assessment: MentionAssessmentResponse;
+  }> {
     const { octokit, ...rest } = request;
     const messages = buildMentionMessages(rest);
     const maxToolCalls = 5; // Limit tool usage to prevent infinite loops
     let toolCallCount = 0;
 
-    console.log("messages", messages);
+    let currentMessages: ChatCompletionMessageParam[] = [...messages];
 
     try {
-      let currentMessages = [...messages];
-
       while (toolCallCount < maxToolCalls) {
         const completion = await client.chat.completions.create({
           model: aiConfig.model,
           temperature: 0.2,
           messages: currentMessages,
-          tools: GITHUB_TOOLS,
+          tools: GITHUB_READ_ONLY_TOOLS,
           tool_choice: toolCallCount === 0 ? "auto" : "none", // Allow tools initially, then force final response
         });
 
@@ -326,62 +88,169 @@ export async function createAiAdapter(env: SymbioteEnv, config: PluginSettings):
         // Add the assistant's message to the conversation
         currentMessages.push(message);
 
-        // Check if the assistant wants to use tools
-        if (message.tool_calls && message.tool_calls.length > 0) {
-          toolCallCount += message.tool_calls.length;
+        const {
+          toolCallCount: nextToolCallCount,
+          normalized,
+          done,
+        } = await handleAssistantMessage<MentionAssessmentResponse>({
+          message,
+          currentMessages,
+          octokit,
+          toolCallCount,
+          defaultResponse: DEFAULT_ASSESSMENT,
+        });
 
-          // Execute each tool call with rate limiting
-          for (const toolCall of message.tool_calls) {
-            try {
-              // Small delay between tool calls to avoid rate limiting
-              if (toolCallCount > 1) {
-                await new Promise((resolve) => setTimeout(resolve, 500));
-              }
+        toolCallCount = nextToolCallCount;
 
-              const toolResult = await executeGitHubTool(octokit, toolCall);
-              currentMessages.push({
-                role: "tool",
-                tool_call_id: toolCall.id,
-                content: JSON.stringify(toolResult),
-              });
-            } catch (error) {
-              console.warn(`[AI] Tool call failed: ${toolCall.function.name}`, {
-                error: error instanceof Error ? error.message : String(error),
-                toolCallId: toolCall.id,
-              });
-
-              currentMessages.push({
-                role: "tool",
-                tool_call_id: toolCall.id,
-                content: JSON.stringify({
-                  error: error instanceof Error ? error.message : String(error),
-                  tool: toolCall.function.name,
-                }),
-              });
-            }
+        if (done) {
+          if (normalized) {
+            return {
+              messages: [...currentMessages, { role: "assistant", content: JSON.stringify(normalized) }],
+              assessment: normalized
+            };
           }
-        } else {
-          // No more tool calls, this should be the final response
-          const answer = message.content;
-          if (!answer) {
-            return DEFAULT_ASSESSMENT;
-          }
-
-          const parsed = safeParse(answer);
-          return normalizeAssessment(parsed);
         }
       }
-
-      // If we exhausted tool calls without a final response, return default
-      return DEFAULT_ASSESSMENT;
     } catch (error) {
       console.error(`[AI] Failed to classify mention`, { error });
-      return DEFAULT_ASSESSMENT;
+      return {
+        messages:[
+        ...currentMessages,
+        {
+          role: "assistant",
+          content: 
+`An error occurred while parsing the response into a JSON object, a default will be provided as well as details about the error.
+
+# DEFAULT RESPONSE
+
+${JSON.stringify(DEFAULT_ASSESSMENT)}
+        
+# ERROR DETAILS
+
+${error instanceof Error ? error.message : String(error)}\n\n\n`.trim(),
+        },
+      ],
+      assessment: DEFAULT_ASSESSMENT,
     }
+    }
+    return {
+      messages: [...currentMessages, { role: "assistant", content: JSON.stringify(DEFAULT_ASSESSMENT) }],
+      assessment: DEFAULT_ASSESSMENT,
+    };
+  }
+
+  async function executeSuggestedActions({
+    request,
+    octokit,
+    assessment,
+    existingMessages,
+  }: {
+    request: MentionAssessmentRequest;
+    octokit: InstanceType<typeof customOctokit>;
+    assessment: MentionAssessmentResponse;
+    existingMessages: ChatCompletionMessageParam[];
+  }): Promise<{
+    messages: ChatCompletionMessageParam[];
+    response: SuggestedActionsResponse;
+  }> {
+    const messages = buildSuggestedActionsMessages(request, assessment, existingMessages);
+    let toolCallCount = 0;
+    const maxToolCalls = 10; // Limit tool usage to prevent infinite loops
+    let currentMessages = [...messages];
+
+    try {
+      while (toolCallCount < maxToolCalls) {
+        const completion = await client.chat.completions.create({
+          model: aiConfig.model,
+          temperature: 0.2,
+          messages: currentMessages,
+          tools: GITHUB_TOOLS,
+          tool_choice: toolCallCount === maxToolCalls ? "none" : "auto", // Allow tools initially, then force final response
+        });
+
+        const choice = completion.choices[0];
+        if (!choice) {
+          break;
+        }
+
+        const message = choice.message;
+
+        currentMessages.push(message);
+
+        const {
+          toolCallCount: nextToolCallCount,
+          normalized,
+          done,
+        } = await handleAssistantMessage<SuggestedActionsResponse>({
+          message,
+          currentMessages,
+          octokit,
+          toolCallCount,
+          defaultResponse: DEFAULT_SUGGESTED_ACTIONS_RESPONSE,
+        });
+
+        toolCallCount = nextToolCallCount;
+        if (done) {
+          if (!normalized) {
+            return {
+              messages: currentMessages,
+              response: DEFAULT_SUGGESTED_ACTIONS_RESPONSE,
+            };
+          }
+
+          return {
+            messages: currentMessages,
+            response: normalized,
+          };
+        }
+      }
+    } catch (error) {
+      console.error(`[AI] Failed to execute suggested actions`, { error });
+    }
+
+    return {
+      messages: currentMessages,
+      response: DEFAULT_SUGGESTED_ACTIONS_RESPONSE,
+    };
+  }
+
+  function buildSuggestedActionsMessages(
+    request: MentionAssessmentRequest,
+    assessment: MentionAssessmentResponse,
+    existingMessages: ChatCompletionMessageParam[]
+  ): ChatCompletionMessageParam[] {
+    // replace the first system message with the suggested actions system prompt
+    existingMessages.find((message) => message.role === "system")!.content = SUGGESTED_ACTIONS_SYSTEM_PROMPT("write", request.hostUsername);
+
+    // the most recent message was the assessment response
+    return [
+      ...existingMessages,
+      {
+        role: "user",
+        content: `
+Using the existing context, begin iterating through the following action items and execute them one by one.
+
+${formatList(assessment.suggestedActions)}
+
+Respond with a final response detailed JSON object describing the results of the actions, like this:
+{
+  "finalResponse": "final response to the user",
+  "results": [
+    {
+      "action": "action_name",
+      "result": "success" | "failure",
+      "reason": "reason for the result",
+    },
+  ],
+}
+        `.trim(),
+      },
+    ];
   }
 
   return {
     classifyMention,
+    executeSuggestedActions,
   };
 }
 
@@ -392,60 +261,12 @@ function buildMentionMessages(request: Omit<MentionAssessmentRequest, "octokit">
     notification: rest,
   };
 
-  const systemMessage = `
-You're a symbiont to ${hostUsername} on GitHub, you operate asynchronously on their behalf and for their benefit.
-
-Your primary goal is to make your host's life easier and more productive by automating, streamlining, and improving their workflow.
-
-You are given a notification from GitHub and you need to decide what to do with it on behalf of your host.
-
-AVAILABLE TOOLS:
-
-READING TOOLS (use these to gather information):
-- fetch_pull_request_details: Get PR details, status, and recent commits
-- fetch_issue_details: Get issue details and metadata
-- fetch_recent_comments: Get recent comments from PRs/issues
-- fetch_commit_details: Get commit information and file changes
-
-ACTION TOOLS (use these to take actions on behalf of your host):
-- create_pull_request: Create new PRs (e.g., starter implementations, fixes)
-- create_issue: Create new issues (e.g., track todos, report problems)
-- create_comment: Reply to issues/PRs with helpful information
-- create_review: Submit PR reviews with feedback
-- update_pull_request: Modify existing PRs (title, description, close, etc.)
-- update_issue: Modify existing issues (labels, assignees, close, etc.)
-- update_comment: Edit previous comments
-- add_reaction: Add emoji reactions to show acknowledgment
-
-BEHAVIOR GUIDELINES:
-- Be proactive but cautious - only act when you have sufficient context
-- Use reading tools first to understand situations before taking action
-- When "respond" classification: Use action tools to directly help your host
-- When "investigate" classification: Gather more info with reading tools, then potentially act
-- When "ignore" classification: The notification doesn't require any action
-
-EXAMPLES OF WHEN TO ACT:
-- Someone asks for help in a comment → create_comment with solution
-- PR needs review feedback → create_review with constructive feedback
-- Issue describes a bug you can fix → create_pull_request with fix
-- Task mentioned that you can implement → create_issue to track, then create_pull_request
-- PR is ready for merge → update_pull_request to merge or add_reaction
-
-After gathering any needed context with tools, respond with a detailed JSON object describing your assessment and any actions you plan to take, like this:
-{
-  "shouldAct": boolean,
-  "priority": "low" | "medium" | "high",
-  "confidence": number (0-1),
-  "reason": string,
-  "suggestedActions": string[],
-  "classification": "respond" | "investigate" | "ignore"
-}
-`.trim();
+  const systemPrompt = MENTION_CLASSIFICATION_SYSTEM_PROMPT(hostUsername);
 
   return [
     {
       role: "system",
-      content: systemMessage,
+      content: systemPrompt,
     },
     {
       role: "user",
@@ -454,12 +275,12 @@ After gathering any needed context with tools, respond with a detailed JSON obje
   ];
 }
 
-function safeParse(content: string): Partial<MentionAssessmentResponse> {
+function safeParse<T extends MentionAssessmentResponse | SuggestedActionsResponse>(content: string): T | string {
   try {
-    return JSON.parse(content) as MentionAssessmentResponse;
+    return JSON.parse(content) as T;
   } catch (error) {
     console.error(`[AI] Unable to parse assessment JSON`, { error, content });
-    return {};
+    return content;
   }
 }
 
@@ -482,6 +303,74 @@ function isPriority(value: unknown): value is MentionPriority {
 
 function isClassification(value: unknown): value is MentionAssessmentResponse["classification"] {
   return value === "respond" || value === "investigate" || value === "ignore";
+}
+
+async function handleAssistantMessage<T extends MentionAssessmentResponse | SuggestedActionsResponse>({
+  message,
+  currentMessages,
+  octokit,
+  toolCallCount,
+  defaultResponse,
+}: {
+  message: OpenAI.Chat.Completions.ChatCompletionMessage;
+  currentMessages: ChatCompletionMessageParam[];
+  octokit: InstanceType<typeof customOctokit>;
+  toolCallCount: number;
+  defaultResponse: T;
+}): Promise<{ toolCallCount: number; normalized?: T; done: boolean }> {
+  let updatedCount = toolCallCount;
+
+  if (message.tool_calls && message.tool_calls.length > 0) {
+    for (const toolCall of message.tool_calls) {
+      updatedCount += 1;
+
+      try {
+        if (updatedCount > 1) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+
+        const toolResult = await executeGitHubTool(octokit, toolCall);
+        currentMessages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify(toolResult),
+        });
+      } catch (error) {
+        console.warn(`[AI] Tool call failed: ${toolCall.function.name}`, {
+          error: error instanceof Error ? error.message : String(error),
+          toolCallId: toolCall.id,
+        });
+
+        currentMessages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: JSON.stringify({
+            error: error instanceof Error ? error.message : String(error),
+            tool: toolCall.function.name,
+          }),
+        });
+      }
+    }
+
+    return { toolCallCount: updatedCount, done: false };
+  }
+
+  const answer = message.content;
+  if (!answer) {
+    return { toolCallCount: updatedCount, normalized: defaultResponse, done: true };
+  }
+
+  const parsed = safeParse<T>(answer);
+  if (typeof parsed === "string") {
+    const newResponse = `
+An error occurred while parsing the response into a JSON object, alt
+    
+    `;
+
+    return { toolCallCount: updatedCount, normalized: defaultResponse, done: true };
+  }
+
+  return { toolCallCount: updatedCount, normalized: parsed, done: true };
 }
 
 async function executeGitHubTool(
@@ -642,8 +531,8 @@ async function executeGitHubTool(
         return {
           pull_request: {
             number: 1,
-            title: "test",
-            html_url: "https://github.com/test/test/pull/1",
+            title,
+            html_url: `https://github.com/${owner}/${repo}/pull/1`,
             created_at: new Date().toISOString(),
           },
         };
@@ -652,8 +541,8 @@ async function executeGitHubTool(
       case "create_issue": {
         const { owner, repo, title, body, labels, assignees } = params;
         // const issue = await octokit.rest.issues.create({
-          // owner,
-          // repo,
+        // owner,
+        // repo,
         //   title,
         //   body,
         //   labels,
@@ -665,8 +554,8 @@ async function executeGitHubTool(
         return {
           issue: {
             number: 1,
-            title: "test",
-            html_url: "https://github.com/test/test/issues/1",
+            title,
+            html_url: `https://github.com/${owner}/${repo}/issues/1`,
             created_at: new Date().toISOString(),
           },
         };
@@ -686,7 +575,7 @@ async function executeGitHubTool(
         return {
           comment: {
             id: 1,
-            html_url: "https://github.com/test/test/issues/1/comments/1",
+            html_url: `https://github.com/${owner}/${repo}/issues/1/comments/1`,
             created_at: new Date().toISOString(),
           },
         };
@@ -705,12 +594,11 @@ async function executeGitHubTool(
 
         console.log("create_review", params);
 
-
         return {
           review: {
             id: 1,
             state: "commented",
-            html_url: "https://github.com/test/test/pull/1/reviews/1",
+            html_url: `https://github.com/${owner}/${repo}/pull/1/reviews/1`,
             submitted_at: new Date().toISOString(),
           },
         };
@@ -733,8 +621,8 @@ async function executeGitHubTool(
         return {
           pull_request: {
             number: 1,
-            title: "test",
-            state: "open",
+            title,
+            state,
             updated_at: new Date().toISOString(),
           },
         };
@@ -758,8 +646,8 @@ async function executeGitHubTool(
         return {
           issue: {
             number: 1,
-            title: "test",
-            state: "open",
+            title,
+            state,
             updated_at: new Date().toISOString(),
           },
         };
@@ -778,7 +666,7 @@ async function executeGitHubTool(
 
         return {
           comment: {
-            id: 1,
+            id: comment_id,
             updated_at: new Date().toISOString(),
           },
         };
@@ -794,12 +682,11 @@ async function executeGitHubTool(
         // });
 
         console.log("add_reaction", params);
-        
-        
+
         return {
           reaction: {
             id: 1,
-            content: "+1",
+            content,
             created_at: new Date().toISOString(),
           },
         };

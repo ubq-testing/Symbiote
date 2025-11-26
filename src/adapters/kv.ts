@@ -1,4 +1,4 @@
-import { AtomicOperation, Kv, KvCommitResult, KvConsistencyLevel, KvKey, KvKeyPart} from "@deno/kv";
+import { AtomicOperation, Kv} from "@deno/kv";
 import { WorkerEnv, WorkflowEnv } from "../types/index";
 
 function isLocalOrWorkflowEnv(env: WorkflowEnv | WorkerEnv): env is WorkflowEnv & { NODE_ENV: "local" } {
@@ -6,54 +6,54 @@ function isLocalOrWorkflowEnv(env: WorkflowEnv | WorkerEnv): env is WorkflowEnv 
 }
 
 export class KvAdapter {
-  private _kv: Kv | Deno.Kv;
-  constructor(kv: Kv | Deno.Kv) {
+  private _kv: Kv;
+  constructor(kv: Kv) {
     this._kv = kv;
   }
 
-  async get<T = unknown>(key: KvKey, options?: { consistency?: KvConsistencyLevel }){
-    return await this._kv.get<T>(key, options);
-  }
+  async get<T = unknown>(key: string[], options?: { consistency?: unknown }){
+    return await this._kv.get<T>(key);
+  } 
 
-  async set(key: KvKey, value: unknown): Promise<KvCommitResult> {
+  async set(key: string[], value: unknown){
     return await this._kv.set(key, value);
   }
 
-  async delete(key: KvKey): Promise<void> {
-    await this._kv.delete(key);
+  async delete(key: string[]) {
+    return await this._kv.delete(key);
   }
 
   async close(): Promise<void> {
     return this._kv.close();
   }
 
-  list<T = unknown>(options: { prefix: KvKeyPart[]; end: KvKey }) {
-    return this._kv.list(options);
+  list<T = unknown>(options: { prefix: string[]; end: string[] }) {
+    return this._kv.list(options);  
   }
 
   watch<T extends readonly unknown[]>(
-    keys: readonly [...{ [K in keyof T]: KvKey }],
+    keys: readonly [...{ [K in keyof T]: string[] }],
     options?: { raw?: boolean | undefined }
   ) {
     return this._kv.watch(keys, options);
   }
 
   getMany<T extends readonly unknown[]>(
-    keys: readonly [...{ [K in keyof T]: KvKey }],
-    options?: { consistency?: KvConsistencyLevel }
+    keys: readonly [...{ [K in keyof T]: string[] }],
+    options?: { consistency?: unknown }
   ) {
-    return this._kv.getMany(keys, options);
+    return this._kv.getMany(keys);
   }
 
   atomic(): AtomicOperation {
     return this._kv.atomic();
   }
 
-  enqueue(value: unknown, options?: { delay?: number; keysIfUndelivered?: KvKey[] }) {
-    return this._kv.enqueue(value, options);
+  enqueue(value: unknown, options?: { delay?: number; keysIfUndelivered?: string[] }) {
+    return this._kv.enqueue(value);
   }
 
-  listenQueue(handler: (value: unknown) => Promise<void> | void): Promise<void> {
+  listenQueue(handler: (value: unknown) => Promise<void> | void) {
     return this._kv.listenQueue(handler);
   }
 
@@ -64,13 +64,13 @@ export class KvAdapter {
 
 export async function createKvAdapter(env: WorkflowEnv | WorkerEnv): Promise<KvAdapter> {
   // First check if we're in Deno runtime - if so, use the built-in KV API
-  if (typeof Deno !== "undefined" && Deno.openKv) {
-    const kv = await Deno.openKv();
-    if (!kv) {
-      throw new Error("Failed to open Deno KV");
-    }
-    return new KvAdapter(kv);
-  }
+  // if (typeof Deno !== "undefined" && Deno.openKv) {
+  //   const kv = await Deno.openKv();
+  //   if (!kv) {
+  //     throw new Error("Failed to open Deno KV");
+  //   }
+  //   return new KvAdapter(kv);
+  // }
 
   /**
    * TODO MOVE INTO ABOVE
@@ -78,11 +78,11 @@ export async function createKvAdapter(env: WorkflowEnv | WorkerEnv): Promise<KvA
    * and the environment is a local or workflow environment, we can use the DENO_KV_UUID
    * to open the KV store remotely, this way all environments can use the same KV store.
    */
-  if (isLocalOrWorkflowEnv(env)) {
+  // if (isLocalOrWorkflowEnv(env)) {
     const { openKv } = await import("@deno/kv");
-    const { DENO_KV_UUID } = env;
-    return new KvAdapter(await openKv(`https://api.deno.com/databases/${DENO_KV_UUID}/connect`));
-  }
+
+    return new KvAdapter(await openKv(`https://api.deno.com/databases/204639ee-f6e8-4f73-91c7-f8ddb46b302f/connect`));
+  // }
 
   throw new Error("KV store is not available");
 }

@@ -1,7 +1,7 @@
 import { Context } from "../../../../types/index";
 import type { Notification } from "../event-poller";
-import type { MentionAssessmentRequest } from "../../../../adapters/ai/adapter";
 import { createRepoOctokit } from "../../../octokit";
+import { MentionAssessmentRequest } from "../../../../adapters/ai/prompts/types";
 
 type NotificationHandlerArgs = {
   context: Context<"server.start" | "server.restart", "action">;
@@ -282,7 +282,7 @@ async function handlePullRequestMention(args: NotificationHandlerArgs): Promise<
 
   let octokit;
 
-  if(route === "kernel-forwarded" || route === "safe-action") {
+  if (route === "kernel-forwarded" || route === "safe-action") {
     octokit = await createRepoOctokit({
       env: context.env,
       owner: summary.repository.owner ?? "",
@@ -291,7 +291,6 @@ async function handlePullRequestMention(args: NotificationHandlerArgs): Promise<
   } else {
     octokit = context.hostOctokit;
   }
-
 
   const aiRequest: MentionAssessmentRequest = {
     hostUsername: context.env.SYMBIOTE_HOST.USERNAME,
@@ -306,10 +305,10 @@ async function handlePullRequestMention(args: NotificationHandlerArgs): Promise<
     unread: summary.unread,
     createdAt: summary.createdAt ?? summary.updatedAt,
     additionalContext: buildAdditionalContext(summary, mentionContext),
-    octokit
+    octokit,
   };
 
-  const assessment = await adapters.ai.classifyMention(aiRequest);
+  const { assessment, messages } = await adapters.ai.classifyMention(aiRequest);
 
   logger.info(`[NOTIFICATIONS][pull_request:mention] AI assessment completed`, {
     notificationId: summary.id,
@@ -324,6 +323,28 @@ async function handlePullRequestMention(args: NotificationHandlerArgs): Promise<
       notificationId: summary.id,
       suggestedActions: assessment.suggestedActions,
       confidence: assessment.confidence,
+    });
+
+    let existingMessages = [...messages];
+
+    const { messages: actionMessages, response } = await adapters.ai.executeSuggestedActions({
+      request: aiRequest,
+      octokit,
+      assessment,
+      existingMessages,
+    });
+
+    logger.info(`[NOTIFICATIONS][pull_request:mention] AI action result`, {
+      notificationId: summary.id,
+      results: response.results,
+      finalResponse: response.finalResponse,
+      messages: actionMessages,
+    });
+  } else {
+    logger.info(`[NOTIFICATIONS][pull_request:mention] AI chose to ignore the notification`, {
+      notificationId: summary.id,
+      assessment,
+      mentionPreview: mentionContext?.body?.slice(0, 320),
     });
   }
 }
@@ -351,12 +372,7 @@ async function fetchMentionContext(
 
     const data = response.data as Record<string, unknown>;
     const comment = data.comment as { body?: unknown } | undefined;
-    const body =
-      typeof data.body === "string"
-        ? (data.body as string)
-        : typeof comment?.body === "string"
-          ? (comment.body as string)
-          : null;
+    const body = typeof data.body === "string" ? (data.body as string) : typeof comment?.body === "string" ? (comment.body as string) : null;
     const user = (data.user as { login?: string } | undefined)?.login;
     const actor = (data.actor as { login?: string } | undefined)?.login;
 
@@ -364,7 +380,7 @@ async function fetchMentionContext(
       body,
       author: user ?? actor ?? null,
       htmlUrl: typeof data.html_url === "string" ? data.html_url : null,
-      type: typeof data.node_id === "string" ? data.node_id.split(":")[0] ?? null : null,
+      type: typeof data.node_id === "string" ? (data.node_id.split(":")[0] ?? null) : null,
     };
   } catch (error) {
     context.logger.error(`[NOTIFICATIONS][pull_request:mention] Failed to load mention context`, {
@@ -393,4 +409,3 @@ function buildAdditionalContext(summary: NotificationSummary, mentionContext: Me
 
   return contextLines;
 }
-
