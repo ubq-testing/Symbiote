@@ -3,9 +3,7 @@ import { Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { KvAdapter } from "../../../../adapters/kv";
 import { WorkerEnv } from "../../../../types/env";
 import { createRepoOctokit } from "../../../octokit";
-
-const TOKEN_KEY_PREFIX = ["oauth", "token"];
-const STATE_KEY_PREFIX = ["oauth", "state"];
+import { buildStateKey, buildTokenKey } from "../../../../utils/kv";
 
 export interface OAuthPendingState {
   login: string;
@@ -41,13 +39,6 @@ function normalizeLogin(login: string) {
   return login.toLowerCase();
 }
 
-function buildTokenKey(login: string) {
-  return [...TOKEN_KEY_PREFIX, normalizeLogin(login)];
-}
-
-function buildStateKey(state: string) {
-  return [...STATE_KEY_PREFIX, state];
-}
 
 export function generateOAuthState() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {

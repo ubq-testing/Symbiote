@@ -5,6 +5,7 @@ import { CallbackResult } from "../../types/callbacks";
 import { customEventSchemas } from "../../types/custom-event-schemas";
 import { isCommentEvent } from "../../types/typeguards";
 import { readUserToken, generateOAuthState, storePendingState, buildAuthorizationUrl, postAuthorizationComment } from "../worker/routes/oauth/backend";
+import { buildTokenKey } from "../../utils/kv";
 
 const MS_PER_HOUR = 60 * 60 * 1000;
 
@@ -192,7 +193,7 @@ export class SymbioteServer {
   }
 
   async handleServerStart(): Promise<CallbackResult> {
-    const { logger, payload, adapters, env, appOctokit } = this._context;
+    const { logger, adapters } = this._context;
     let sessionId, workflowId;
     if (isCommentEvent(this._context)) {
       sessionId = this._context.pluginInputs.stateId;
@@ -206,54 +207,80 @@ export class SymbioteServer {
 
     const login = this._context.env.SYMBIOTE_HOST.USERNAME;
     const cachedToken = await readUserToken(adapters.kv, login);
-    let owner, repo, issueNumber;
 
-    if (!cachedToken) {
-      if (isCommentEvent(this._context)) {
-        owner = this._context.payload.repository?.owner?.login;
-        repo = this._context.payload.repository?.name;
-        issueNumber = this._context.payload.issue?.number;
+    if (cachedToken) {
+      let validToken = await this.validateOAuthToken(cachedToken);
 
-        if (!issueNumber) {
-          throw logger.error("Missing issue or pull request number when requesting OAuth authorization");
-        }
-      } else if (isCustomEvent(this._context)) {
-        // TODO: Implement custom event handling
-        // in reality, we shouldn't need this i don't think
-        throw new Error("Custom event OAuth not implemented");
+      if (!validToken) {
+        logger.info("Cached OAuth token is invalid, requesting new authorization", { login });
+        await this._context.adapters.kv.delete(buildTokenKey(login));
       }
 
-      if (!owner || !repo || !issueNumber) {
-        logger.error("Missing repository or issue context when requesting OAuth authorization");
-        return { status: 500, reason: "Unable to build OAuth authorization comment" };
-      }
-
-      const state = generateOAuthState();
-      await storePendingState(adapters.kv, state, {
-        login,
-        owner,
-        repo,
-        issueNumber,
-        createdAt: new Date().toISOString(),
-      });
-
-      const authUrl = buildAuthorizationUrl(env, state);
-      await postAuthorizationComment({
-        appOctokit,
-        owner,
-        repo,
-        issueNumber,
-        login,
-        url: authUrl,
-      });
-
-      logger.info("OAuth authorization requested", { login, owner, repo, issueNumber, state });
-      return { status: 200, reason: "OAuth authorization requested. Please follow the comment link." };
+      logger.info("Using cached OAuth token for user", { login });
+      this._context.pluginInputs.authToken = cachedToken;
+      return await this.spawnServer();
+    } else {
+      logger.info("No OAuth token found for user, requesting new authorization", { login });
     }
 
-    this._context.pluginInputs.authToken = cachedToken;
-    logger.info("Using cached OAuth token for user", { login });
+    return await this.requestOAuthAuthorization(login);
+  }
 
-    return await this.spawnServer();
+  async requestOAuthAuthorization(login: string): Promise<CallbackResult> {
+    const { logger, adapters, env, appOctokit } = this._context;
+    let owner, repo, issueNumber;
+    if (isCommentEvent(this._context)) {
+      owner = this._context.payload.repository?.owner?.login;
+      repo = this._context.payload.repository?.name;
+      issueNumber = this._context.payload.issue?.number;
+
+      if (!issueNumber) {
+        throw logger.error("Missing issue or pull request number when requesting OAuth authorization");
+      }
+    } else if (isCustomEvent(this._context)) {
+      // TODO: Implement custom event handling
+      // in reality, we shouldn't need this i don't think
+      throw new Error("Custom event OAuth not implemented");
+    }
+
+    if (!owner || !repo || !issueNumber) {
+      logger.error("Missing repository or issue context when requesting OAuth authorization");
+      return { status: 500, reason: "Unable to build OAuth authorization comment" };
+    }
+
+    const state = generateOAuthState();
+    await storePendingState(adapters.kv, state, {
+      login,
+      owner,
+      repo,
+      issueNumber,
+      createdAt: new Date().toISOString(),
+    });
+
+    const authUrl = buildAuthorizationUrl(env, state);
+    await postAuthorizationComment({
+      appOctokit,
+      owner,
+      repo,
+      issueNumber,
+      login,
+      url: authUrl,
+    });
+
+    logger.info("OAuth authorization requested", { login, owner, repo, issueNumber, state });
+
+    return { status: 200, reason: "OAuth authorization requested. Link generated and posted to issue." };
+  }
+
+  async validateOAuthToken(token: string): Promise<boolean> {
+    const { appOctokit } = this._context;
+    try {
+      await appOctokit.rest.users.getAuthenticated({
+        auth: token,
+      });
+      return true;
+    } catch (error) {
+      return false;
+    }
   }
 }
