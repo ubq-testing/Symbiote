@@ -6,8 +6,8 @@ function isLocalOrWorkflowEnv(env: WorkflowEnv | WorkerEnv): env is WorkflowEnv 
 }
 
 export class KvAdapter {
-  private _kv: Kv;
-  constructor(kv: Kv) {
+  private _kv: Deno.Kv;
+  constructor(kv: Deno.Kv) {
     this._kv = kv;
   }
 
@@ -64,13 +64,13 @@ export class KvAdapter {
 
 export async function createKvAdapter(env: WorkflowEnv | WorkerEnv): Promise<KvAdapter> {
   // First check if we're in Deno runtime - if so, use the built-in KV API
-  // if (typeof Deno !== "undefined" && Deno.openKv) {
-  //   const kv = await Deno.openKv();
-  //   if (!kv) {
-  //     throw new Error("Failed to open Deno KV");
-  //   }
-  //   return new KvAdapter(kv);
-  // }
+  if (typeof Deno !== "undefined" && Deno.openKv) {
+    const kv = await Deno.openKv();
+    if (!kv) {
+      throw new Error("Failed to open Deno KV");
+    }
+    return new KvAdapter(kv);
+  }
 
   /**
    * TODO MOVE INTO ABOVE
@@ -79,9 +79,9 @@ export async function createKvAdapter(env: WorkflowEnv | WorkerEnv): Promise<KvA
    * to open the KV store remotely, this way all environments can use the same KV store.
    */
   // if (isLocalOrWorkflowEnv(env)) {
-    const { openKv } = await import("@deno/kv");
+    // const { openKv } = await import("@deno/kv");
 
-    return new KvAdapter(await openKv(`https://api.deno.com/databases/204639ee-f6e8-4f73-91c7-f8ddb46b302f/connect`));
+    // return new KvAdapter(await openKv(`https://api.deno.com/databases/204639ee-f6e8-4f73-91c7-f8ddb46b302f/connect`));
   // }
 
   throw new Error("KV store is not available");

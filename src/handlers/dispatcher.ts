@@ -57,18 +57,15 @@ async function workflowDispatch<T extends SupportedEvents = SupportedEvents>(
     }
     const { pluginInputs } = context;
 
-    const octokit = new customOctokit({
-      auth: pluginInputs.authToken,
-    });
     const { owner, repo } = context.env.SYMBIOTE_HOST.FORKED_REPO;
 
     if (!owner || !repo) {
       throw new Error("Invalid SYMBIOTE_HOST.FORKED_REPO");
     }
 
-    return await octokit.rest.actions.createWorkflowDispatch({
-      owner: context.env.SYMBIOTE_HOST.FORKED_REPO.owner,
-      repo: context.env.SYMBIOTE_HOST.FORKED_REPO.repo,
+    return await context.appOctokit.rest.actions.createWorkflowDispatch({
+      owner,
+      repo,
       workflow_id: workflowId,
       ref: context.config.executionBranch,
       inputs: {
