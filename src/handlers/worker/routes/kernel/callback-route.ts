@@ -25,8 +25,9 @@ export async function createKernelCallbackRoute({
         
         // appOctokit: Authorized as the GitHub App for app-level operations (installations, etc.)
         const appOctokit = await createAppOctokit(validatedEnv);
-        // hostOctokit: Authorized with host PAT for polling events/notifications
-        const hostOctokit = await createUserOctokit(validatedEnv.SYMBIOTE_HOST_PAT);
+        // hostOctokit: The worker shouldn't really be user the host's PAT, it should be the installation token.
+        // TODO: handle type system properly to null these octokits
+        const hostOctokit = context.octokit;
         // symbioteOctokit: For kernel-forwarded events, use the context.octokit (installation token)
         // since the kernel handles auth. For public-facing actions, this will be the installation token.
         const symbioteOctokit = context.octokit;

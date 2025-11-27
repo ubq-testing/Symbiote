@@ -47,7 +47,7 @@ export async function createCallbackRoute({
         // appOctokit: Authorized as the GitHub App for app-level operations (installations, etc.)
         const appOctokit = await createAppOctokit(validatedEnv);
         // hostOctokit: Authorized with host PAT for polling events/notifications
-        const hostOctokit = await createUserOctokit(validatedEnv.SYMBIOTE_HOST_PAT);
+        const hostOctokit = appOctokit;
         // symbioteOctokit: Authorized with OAuth token to act on behalf of the user (comments, PRs, issues)
         const symbioteOctokit = await createUserOctokit(validatedPayload.client_payload.authToken);
   
