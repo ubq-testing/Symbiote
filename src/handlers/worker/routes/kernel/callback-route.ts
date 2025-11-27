@@ -6,6 +6,7 @@ import { runSymbiote } from "../../../../index";
 import { createAdapters } from "../../../../adapters/create-adapters";
 import { PluginInputs } from "../../../../types/callbacks";
 import { Command } from "../../../../types/command";
+import { createAppOctokit, createUserOctokit } from "../../../octokit";
 import manifest from "../../../../../manifest.json" with { type: "json" };
 
 export async function createKernelCallbackRoute({
@@ -20,14 +21,24 @@ export async function createKernelCallbackRoute({
     return createPlugin<PluginSettings, WorkerEnv, Command, SupportedWebhookEvents & SupportedCustomEvents>(
       async (context) => {
         const adapters = await createAdapters(validatedEnv, context.config);
+        const pluginInputs = (await clonedRequest.json()) as PluginInputs;
+        
+        // appOctokit: Authorized as the GitHub App for app-level operations (installations, etc.)
+        const appOctokit = await createAppOctokit(validatedEnv);
+        // hostOctokit: Authorized with host PAT for polling events/notifications
+        const hostOctokit = await createUserOctokit(validatedEnv.SYMBIOTE_HOST_PAT);
+        // symbioteOctokit: For kernel-forwarded events, use the context.octokit (installation token)
+        // since the kernel handles auth. For public-facing actions, this will be the installation token.
+        const symbioteOctokit = context.octokit;
+        
         return runSymbiote<SupportedEvents, "worker">({
           ...context,
-          // TODO: Worker should only have octokit as standard
-          appOctokit: context.octokit,
-          hostOctokit: context.octokit,
+          appOctokit,
+          hostOctokit,
+          symbioteOctokit,
           env: validatedEnv,
           request: clonedRequest,
-          pluginInputs: (await clonedRequest.json()) as PluginInputs,
+          pluginInputs,
           runtime: "worker",
           adapters,
         });

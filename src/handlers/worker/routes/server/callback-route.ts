@@ -31,7 +31,7 @@ export async function createCallbackRoute({
     const event = ctx.req.header("X-GitHub-Event") as SupportedCustomEvents;
     logger.info(`Received callback for event: ${event}`, {body,event});
   
-    // Handle custom events (server.restart, etctx.)
+    // Handle custom events (server.restart, etc.)
     if (isCustomEventGuard(event)) {
       try {
         const validatedPayload = validateCallbackPayload({ payload: body, logger, event });
@@ -43,8 +43,13 @@ export async function createCallbackRoute({
   
         const config = Value.Default(pluginSettingsSchema, {}) as PluginSettings;
         const adapters = await createAdapters(validatedEnv, config);
+        
+        // appOctokit: Authorized as the GitHub App for app-level operations (installations, etc.)
         const appOctokit = await createAppOctokit(validatedEnv);
-        const hostOctokit = await createUserOctokit(validatedPayload.client_payload.authToken);
+        // hostOctokit: Authorized with host PAT for polling events/notifications
+        const hostOctokit = await createUserOctokit(validatedEnv.SYMBIOTE_HOST_PAT);
+        // symbioteOctokit: Authorized with OAuth token to act on behalf of the user (comments, PRs, issues)
+        const symbioteOctokit = await createUserOctokit(validatedPayload.client_payload.authToken);
   
         // Route to appropriate handler via runSymbiote
         const results = await runSymbiote<SupportedEvents, "worker">({
@@ -58,6 +63,7 @@ export async function createCallbackRoute({
           adapters,
           appOctokit,
           hostOctokit,
+          symbioteOctokit,
           command: null,
           pluginInputs: {
             stateId: validatedPayload.client_payload.stateId,

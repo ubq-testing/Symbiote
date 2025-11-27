@@ -64,9 +64,11 @@ export async function dispatchNotification({
       confidence: assessment.confidence,
     });
 
+    // Use symbioteOctokit for public-facing actions (comments, PRs, issues)
+    // This authenticates as the user who authorized the OAuth flow
     const { messages: actionMessages, response } = await adapters.ai.executeSuggestedActions({
       request,
-      octokit: context.appOctokit,
+      octokit: context.symbioteOctokit,
       assessment,
       existingMessages: [...messages],
     });

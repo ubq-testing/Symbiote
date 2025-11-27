@@ -214,11 +214,13 @@ export class SymbioteServer {
       if (!validToken) {
         logger.info("Cached OAuth token is invalid, requesting new authorization", { login });
         await this._context.adapters.kv.delete(buildTokenKey(login));
+        return await this.requestOAuthAuthorization(login);
       }
 
       logger.info("Using cached OAuth token for user", { login });
       this._context.pluginInputs.authToken = cachedToken;
-      this._context.appOctokit = new customOctokit({ auth: cachedToken });
+      // symbioteOctokit is for public-facing actions (comments, PRs, issues) using the OAuth token
+      this._context.symbioteOctokit = new customOctokit({ auth: cachedToken });
       return await this.spawnServer();
     } else {
       logger.info("No OAuth token found for user, requesting new authorization", { login });
@@ -274,11 +276,10 @@ export class SymbioteServer {
   }
 
   async validateOAuthToken(token: string): Promise<boolean> {
-    const { appOctokit } = this._context;
     try {
-      await appOctokit.rest.users.getAuthenticated({
-        auth: token,
-      });
+      // Create a temporary octokit with the token to validate it
+      const tempOctokit = new customOctokit({ auth: token });
+      await tempOctokit.rest.users.getAuthenticated();
       return true;
     } catch (error) {
       return false;

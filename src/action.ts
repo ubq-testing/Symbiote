@@ -17,6 +17,7 @@ async function runAction() {
         throw new Error("Auth token not found");
     }
 
+
     try {
         await createActionsPlugin<
             PluginSettings,
@@ -29,7 +30,8 @@ async function runAction() {
                 return runSymbiote<SupportedEvents, "action">({
                     ...context,
                     appOctokit: await createAppOctokit(context.env),
-                    hostOctokit: await createUserOctokit(authToken),
+                    hostOctokit: await createUserOctokit(context.env.SYMBIOTE_HOST_PAT),
+                    symbioteOctokit: await createUserOctokit(authToken),
                     runtime: "action",
                     adapters,
                 })
