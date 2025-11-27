@@ -1,9 +1,9 @@
 import OpenAI from "openai";
-import type { ChatCompletionMessage, ChatCompletionMessageParam, ChatCompletionTool } from "openai/resources/chat/completions";
+import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 import { WorkerEnv, WorkflowEnv } from "../../types/env";
 import { PluginSettings } from "../../types/plugin-input";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
-import { GITHUB_READ_ONLY_TOOLS, GITHUB_TOOLS } from "./tools";
+import { executeGitHubTool, GITHUB_READ_ONLY_TOOLS, GITHUB_TOOLS, ToolName } from "./tools";
 import { MENTION_CLASSIFICATION_SYSTEM_PROMPT } from "./prompts/mention-classification";
 import { SUGGESTED_ACTIONS_SYSTEM_PROMPT } from "./prompts/suggested-action-execution";
 import { formatList } from "./prompts/shared";
@@ -98,6 +98,7 @@ export async function createAiAdapter(env: SymbioteEnv, config: PluginSettings):
           octokit,
           toolCallCount,
           defaultResponse: DEFAULT_ASSESSMENT,
+          env,
         });
 
         toolCallCount = nextToolCallCount;
@@ -187,6 +188,7 @@ ${error instanceof Error ? error.message : String(error)}\n\n\n`.trim(),
           octokit,
           toolCallCount,
           defaultResponse: DEFAULT_SUGGESTED_ACTIONS_RESPONSE,
+          env,
         });
 
         toolCallCount = nextToolCallCount;
@@ -311,12 +313,14 @@ async function handleAssistantMessage<T extends MentionAssessmentResponse | Sugg
   octokit,
   toolCallCount,
   defaultResponse,
+  env,
 }: {
   message: OpenAI.Chat.Completions.ChatCompletionMessage;
   currentMessages: ChatCompletionMessageParam[];
   octokit: InstanceType<typeof customOctokit>;
   toolCallCount: number;
   defaultResponse: T;
+  env: SymbioteEnv;
 }): Promise<{ toolCallCount: number; normalized?: T; done: boolean }> {
   let updatedCount = toolCallCount;
 
@@ -329,7 +333,7 @@ async function handleAssistantMessage<T extends MentionAssessmentResponse | Sugg
           await new Promise((resolve) => setTimeout(resolve, 500));
         }
 
-        const toolResult = await executeGitHubTool(octokit, toolCall);
+        const toolResult = await executeGitHubTool(octokit, toolCall, env);
         currentMessages.push({
           role: "tool",
           tool_call_id: toolCall.id,
@@ -362,355 +366,10 @@ async function handleAssistantMessage<T extends MentionAssessmentResponse | Sugg
 
   const parsed = safeParse<T>(answer);
   if (typeof parsed === "string") {
-    const newResponse = `
-An error occurred while parsing the response into a JSON object, alt
-    
-    `;
-
+    console.error(`[AI] Unable to parse response into a JSON object`, { answer });
     return { toolCallCount: updatedCount, normalized: defaultResponse, done: true };
   }
 
   return { toolCallCount: updatedCount, normalized: parsed, done: true };
 }
 
-async function executeGitHubTool(
-  octokit: InstanceType<typeof customOctokit>,
-  toolCall: OpenAI.Chat.Completions.ChatCompletionMessageToolCall
-): Promise<unknown> {
-  const { name, arguments: args } = toolCall.function;
-
-  try {
-    const params = JSON.parse(args);
-
-    switch (name) {
-      // Read-only tools
-      case "fetch_pull_request_details": {
-        const { owner, repo, pull_number } = params;
-        const pr = await octokit.rest.pulls.get({
-          owner,
-          repo,
-          pull_number,
-        });
-
-        // Also fetch recent commits
-        const commits = await octokit.rest.pulls.listCommits({
-          owner,
-          repo,
-          pull_number,
-          per_page: 5,
-        });
-
-        return {
-          pull_request: {
-            number: pr.data.number,
-            title: pr.data.title,
-            body: pr.data.body,
-            state: pr.data.state,
-            merged: pr.data.merged,
-            draft: pr.data.draft,
-            created_at: pr.data.created_at,
-            updated_at: pr.data.updated_at,
-            author: pr.data.user?.login,
-            head: {
-              ref: pr.data.head.ref,
-              sha: pr.data.head.sha,
-            },
-            base: {
-              ref: pr.data.base.ref,
-            },
-          },
-          recent_commits: commits.data.slice(0, 5).map((commit) => ({
-            sha: commit.sha,
-            message: commit.commit.message,
-            author: commit.commit.author?.name,
-            date: commit.commit.author?.date,
-          })),
-        };
-      }
-
-      case "fetch_issue_details": {
-        const { owner, repo, issue_number } = params;
-        const issue = await octokit.rest.issues.get({
-          owner,
-          repo,
-          issue_number,
-        });
-
-        return {
-          issue: {
-            number: issue.data.number,
-            title: issue.data.title,
-            body: issue.data.body,
-            state: issue.data.state,
-            created_at: issue.data.created_at,
-            updated_at: issue.data.updated_at,
-            author: issue.data.user?.login,
-            labels: issue.data.labels.map((label) => (typeof label === "string" ? label : label.name)),
-          },
-        };
-      }
-
-      case "fetch_recent_comments": {
-        const { owner, repo, number, type, limit = 10 } = params;
-
-        let comments;
-        if (type === "pull_request") {
-          comments = await octokit.rest.pulls.listReviewComments({
-            owner,
-            repo,
-            pull_number: number,
-            per_page: limit,
-            sort: "created",
-            direction: "desc",
-          });
-        } else {
-          comments = await octokit.rest.issues.listComments({
-            owner,
-            repo,
-            issue_number: number,
-            per_page: limit,
-            sort: "created",
-            direction: "desc",
-          });
-        }
-
-        return {
-          comments: comments.data.slice(0, limit).map((comment) => ({
-            id: comment.id,
-            body: comment.body,
-            author: comment.user?.login,
-            created_at: comment.created_at,
-            updated_at: comment.updated_at,
-          })),
-        };
-      }
-
-      case "fetch_commit_details": {
-        const { owner, repo, commit_sha } = params;
-        const commit = await octokit.rest.repos.getCommit({
-          owner,
-          repo,
-          ref: commit_sha,
-        });
-
-        return {
-          commit: {
-            sha: commit.data.sha,
-            message: commit.data.commit.message,
-            author: commit.data.commit.author?.name,
-            date: commit.data.commit.author?.date,
-            files_changed: commit.data.files?.length || 0,
-            additions: commit.data.stats?.additions || 0,
-            deletions: commit.data.stats?.deletions || 0,
-            files:
-              commit.data.files?.slice(0, 10).map((file) => ({
-                filename: file.filename,
-                status: file.status,
-                additions: file.additions,
-                deletions: file.deletions,
-              })) || [],
-          },
-        };
-      }
-
-      // Action tools
-      case "create_pull_request": {
-        const { owner, repo, title, head, base = "main", body, draft = false } = params;
-        // const pr = await octokit.rest.pulls.create({
-        //   owner,
-        //   repo,
-        //   title,
-        //   head,
-        //   base,
-        //   body,
-        //   draft,
-        // });
-
-        console.log("create_pull_request", params);
-
-        return {
-          pull_request: {
-            number: 1,
-            title,
-            html_url: `https://github.com/${owner}/${repo}/pull/1`,
-            created_at: new Date().toISOString(),
-          },
-        };
-      }
-
-      case "create_issue": {
-        const { owner, repo, title, body, labels, assignees } = params;
-        // const issue = await octokit.rest.issues.create({
-        // owner,
-        // repo,
-        //   title,
-        //   body,
-        //   labels,
-        //   assignees,
-        // });
-
-        console.log("create_issue", params);
-
-        return {
-          issue: {
-            number: 1,
-            title,
-            html_url: `https://github.com/${owner}/${repo}/issues/1`,
-            created_at: new Date().toISOString(),
-          },
-        };
-      }
-
-      case "create_comment": {
-        const { owner, repo, issue_number, body } = params;
-        // const comment = await octokit.rest.issues.createComment({
-        //   owner,
-        //   repo,
-        //   issue_number,
-        //   body,
-        // });
-
-        console.log("create_comment", params);
-
-        return {
-          comment: {
-            id: 1,
-            html_url: `https://github.com/${owner}/${repo}/issues/1/comments/1`,
-            created_at: new Date().toISOString(),
-          },
-        };
-      }
-
-      case "create_review": {
-        const { owner, repo, pull_number, body, event = "COMMENT", comments } = params;
-        // const review = await octokit.rest.pulls.createReview({
-        //   owner,
-        //   repo,
-        //   pull_number,
-        //   body,
-        //   event,
-        //   comments,
-        // });
-
-        console.log("create_review", params);
-
-        return {
-          review: {
-            id: 1,
-            state: "commented",
-            html_url: `https://github.com/${owner}/${repo}/pull/1/reviews/1`,
-            submitted_at: new Date().toISOString(),
-          },
-        };
-      }
-
-      case "update_pull_request": {
-        const { owner, repo, pull_number, title, body, state, base } = params;
-        // const pr = await octokit.rest.pulls.update({
-        //   owner,
-        //   repo,
-        //   pull_number,
-        //   title,
-        //   body,
-        //   state,
-        //   base,
-        // });
-
-        console.log("update_pull_request", params);
-
-        return {
-          pull_request: {
-            number: 1,
-            title,
-            state,
-            updated_at: new Date().toISOString(),
-          },
-        };
-      }
-
-      case "update_issue": {
-        const { owner, repo, issue_number, title, body, state, labels, assignees } = params;
-        // const issue = await octokit.rest.issues.update({
-        //   owner,
-        //   repo,
-        //   issue_number,
-        //   title,
-        //   body,
-        //   state,
-        //   labels,
-        //   assignees,
-        // });
-
-        console.log("update_issue", params);
-
-        return {
-          issue: {
-            number: 1,
-            title,
-            state,
-            updated_at: new Date().toISOString(),
-          },
-        };
-      }
-
-      case "update_comment": {
-        const { owner, repo, comment_id, body } = params;
-        // const comment = await octokit.rest.issues.updateComment({
-        //   owner,
-        //   repo,
-        //   comment_id,
-        //   body,
-        // });
-
-        console.log("update_comment", params);
-
-        return {
-          comment: {
-            id: comment_id,
-            updated_at: new Date().toISOString(),
-          },
-        };
-      }
-
-      case "add_reaction": {
-        const { owner, repo, subject_id, content } = params;
-        // const reaction = await octokit.rest.reactions.createForIssue({
-        //   owner,
-        //   repo,
-        //   issue_number: subject_id,
-        //   content,
-        // });
-
-        console.log("add_reaction", params);
-
-        return {
-          reaction: {
-            id: 1,
-            content,
-            created_at: new Date().toISOString(),
-          },
-        };
-      }
-
-      default:
-        throw new Error(`Unknown tool: ${name}`);
-    }
-  } catch (error) {
-    // Handle GitHub API errors gracefully
-    if (error instanceof Error && "status" in error) {
-      const status = (error as any).status;
-      if (status === 404) {
-        return { error: `Resource not found: ${name}`, status: 404 };
-      }
-      if (status === 403) {
-        return { error: `Access forbidden: ${name}`, status: 403 };
-      }
-      if (status === 422) {
-        return { error: `Invalid request: ${name}`, status: 422 };
-      }
-    }
-
-    console.error(`[AI] Tool execution failed: ${name}`, { error: error instanceof Error ? error.message : String(error) });
-    return { error: `Tool execution failed: ${error instanceof Error ? error.message : "Unknown error"}` };
-  }
-}
