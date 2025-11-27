@@ -135,9 +135,11 @@ export async function finalizeOAuthCallback({
   const token = await exchangeCodeForToken(env, code, state);
   await saveUserToken(kv, pending.login, token);
 
+
+  //  todo: think if we can handle this better without the duplicate command needed to start the server
   const message = [
     `Thanks, @${pending.login}! Authorization succeeded.`,
-    "Symbiote can now act on your behalf. Run `/symbiote start` to begin or wait for the worker to respond to the previous command.",
+    "Symbiote can now act on your behalf. Run `/symbiote start` again to begin.",
   ].join("\n\n");
 
   const repoOctokit = await createRepoOctokit({

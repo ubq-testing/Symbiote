@@ -1,4 +1,4 @@
-import { RestEndpointMethodTypes } from "@ubiquity-os/plugin-sdk/octokit";
+import { customOctokit, RestEndpointMethodTypes } from "@ubiquity-os/plugin-sdk/octokit";
 import { Context, SupportedCustomEvents, SupportedEvents, SymbioteRuntime } from "../../types/index";
 import { dispatcher } from "../dispatcher";
 import { CallbackResult } from "../../types/callbacks";
@@ -218,6 +218,7 @@ export class SymbioteServer {
 
       logger.info("Using cached OAuth token for user", { login });
       this._context.pluginInputs.authToken = cachedToken;
+      this._context.appOctokit = new customOctokit({ auth: cachedToken });
       return await this.spawnServer();
     } else {
       logger.info("No OAuth token found for user, requesting new authorization", { login });
