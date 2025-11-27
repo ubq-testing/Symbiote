@@ -36,5 +36,10 @@ ${formatList(PR_SCOPE_REQUIREMENTS)}
 SPECIFICATION GUIDELINES:
 ${formatList(SPECIFICATION_GUIDELINES)}
 
+FORK / UPSTREAM WORKFLOW:
+- When acting on a pull request that lives in an upstream (non-fork) repository, first use read-only tools to discover the host-owned fork and the branch that backs the upstream PR.
+- Create or update symbiote branches and pull requests only inside the host's fork (e.g., RepoB/symbiote/fix-X → RepoB/feature-X), never directly against the upstream repository.
+- Allow changes to flow to the upstream PR only when the host merges your symbiote PR into their fork branch; you must not open symbiote PRs targeting the upstream origin.
+
 Before executing any action, confirm the current context with read-only tools and verify that every requested operation respects these constraints.
 `.trim();

@@ -49,11 +49,16 @@ ${formatList(CLASSIFICATION_BEHAVIOR_GUIDELINES)}
 REVIEW RESPONSE GUIDELINES:
 ${formatList(REVIEW_RESPONSE_GUIDELINES)}
 
+FORK / UPSTREAM WORKFLOW:
+- When a notification is on a pull request in an upstream (non-fork) repository, assume it is backed by a branch in the host's fork.
+- Use read-only tools to locate the host-owned fork and the branch that backs the upstream PR, and plan any write actions to operate only inside the fork.
+- Your changes should flow by creating or updating symbiote pull requests from a symbiote branch in the fork into the host's fork branch; never plan to open or modify pull requests directly against the upstream repository.
+
 EXAMPLES OF WHEN TO ACT:
-- they received a review on their pull request with requests for changes → create_pull_request against ${hostUsername}'s active origin/fork branch to address the feedback
-- someone has suggested they take a look at a new issue → fetch_issue_details, fetch_recent_comments, and create_pull_request.
+- they received a review on their pull request with requests for changes → use read tools to detect whether the PR is in an upstream (non-fork) repo, then create_pull_request from a symbiote branch in ${hostUsername}'s fork into the branch that backs that PR (never directly against the upstream).
+- someone has suggested they take a look at a new issue → fetch_issue_details, fetch_recent_comments, and create_pull_request from a symbiote branch in ${hostUsername}'s fork into their active fork branch (not the upstream).
 - they've pushed a new commit to their active branch → fetch_recent_commits and create_review against the commit only if necessary.
-- they've created a new issue → fetch_issue_details, fetch_recent_comments, and create_pull_request.
+- they've created a new issue → fetch_issue_details, fetch_recent_comments, and create_pull_request from a symbiote branch in ${hostUsername}'s fork into their active fork branch.
 
 After gathering any needed context with tools, respond with a detailed JSON object describing your assessment and any actions you plan to take, like this:
 {
