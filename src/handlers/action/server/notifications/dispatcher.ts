@@ -1,6 +1,7 @@
 import { Context } from "../../../../types/index";
 import type { Notification } from "../event-poller";
 import { NotificationAssessmentRequest } from "../../../../adapters/ai/prompts/types";
+import { createRepoOctokit } from "../../../octokit";
 
 export async function dispatchNotification({
   context,
@@ -32,21 +33,22 @@ export async function dispatchNotification({
   let octokit;
   const [owner, repo] = repoFullName?.split("/") ?? [];
 
-  // if ((route === "kernel-forwarded" || route === "safe-action") && owner && repo) {
-  //   octokit = await createRepoOctokit({
-  //     env: context.env,
-  //     owner,
-  //     repo,
-  //   });
-  // } else {
-  // }
+  if ((route === "kernel-forwarded" || route === "safe-action") && owner && repo) {
+    octokit = await createRepoOctokit({
+      env: context.env,
+      owner,
+      repo,
+    });
+  } else {
+    octokit = context.hostOctokit;
+  }
 
   const request: NotificationAssessmentRequest = {
     hostUsername: context.env.SYMBIOTE_HOST.USERNAME,
     notification,
     latestCommentBody: latestComment?.body ?? null,
     latestCommentAuthor: latestComment?.author ?? null,
-    octokit: context.appOctokit,
+    octokit,
   };
 
   const { assessment, messages } = await adapters.ai.classifyNotification(request);
