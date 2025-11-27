@@ -3,18 +3,18 @@ import type { ChatCompletionMessageParam } from "openai/resources/chat/completio
 import { WorkerEnv, WorkflowEnv } from "../../types/env";
 import { PluginSettings } from "../../types/plugin-input";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
-import { executeGitHubTool, GITHUB_READ_ONLY_TOOLS, GITHUB_TOOLS, ToolName } from "./tools";
-import { MENTION_CLASSIFICATION_SYSTEM_PROMPT } from "./prompts/mention-classification";
+import { executeGitHubTool, GITHUB_READ_ONLY_TOOLS, GITHUB_TOOLS } from "./tools";
+import { NOTIFICATION_CLASSIFICATION_SYSTEM_PROMPT } from "./prompts/notification-classification";
 import { SUGGESTED_ACTIONS_SYSTEM_PROMPT } from "./prompts/suggested-action-execution";
 import { formatList } from "./prompts/shared";
-import { MentionAssessmentRequest, MentionAssessmentResponse, SuggestedActionsResponse, MentionPriority } from "./prompts/types";
+import { NotificationAssessmentRequest, NotificationAssessmentResponse, SuggestedActionsResponse, AssessmentPriority } from "./prompts/types";
 
 type SymbioteEnv = WorkerEnv | WorkflowEnv;
 
 export interface AiAdapter {
-  classifyMention(request: MentionAssessmentRequest): Promise<{
+  classifyNotification(request: NotificationAssessmentRequest): Promise<{
     messages: ChatCompletionMessageParam[];
-    assessment: MentionAssessmentResponse;
+    assessment: NotificationAssessmentResponse;
   }>;
   executeSuggestedActions({
     request,
@@ -22,9 +22,9 @@ export interface AiAdapter {
     assessment,
     existingMessages,
   }: {
-    request: MentionAssessmentRequest;
+    request: NotificationAssessmentRequest;
     octokit: InstanceType<typeof customOctokit>;
-    assessment: MentionAssessmentResponse;
+    assessment: NotificationAssessmentResponse;
     existingMessages: ChatCompletionMessageParam[];
   }): Promise<{
     messages: ChatCompletionMessageParam[];
@@ -32,7 +32,7 @@ export interface AiAdapter {
   }>;
 }
 
-const DEFAULT_ASSESSMENT: MentionAssessmentResponse = {
+const DEFAULT_ASSESSMENT: NotificationAssessmentResponse = {
   shouldAct: false,
   priority: "low",
   confidence: 0.1,
@@ -57,13 +57,13 @@ export async function createAiAdapter(env: SymbioteEnv, config: PluginSettings):
     baseURL: aiConfig.baseUrl,
   });
 
-  async function classifyMention(request: MentionAssessmentRequest): Promise<{
+  async function classifyNotification(request: NotificationAssessmentRequest): Promise<{
     messages: ChatCompletionMessageParam[];
-    assessment: MentionAssessmentResponse;
+    assessment: NotificationAssessmentResponse;
   }> {
     const { octokit, ...rest } = request;
-    const messages = buildMentionMessages(rest);
-    const maxToolCalls = 5; // Limit tool usage to prevent infinite loops
+    const messages = buildNotificationMessages(rest);
+    const maxToolCalls = 5;
     let toolCallCount = 0;
 
     let currentMessages: ChatCompletionMessageParam[] = [...messages];
@@ -75,7 +75,7 @@ export async function createAiAdapter(env: SymbioteEnv, config: PluginSettings):
           temperature: 0.2,
           messages: currentMessages,
           tools: GITHUB_READ_ONLY_TOOLS,
-          tool_choice: toolCallCount === 0 ? "auto" : "none", // Allow tools initially, then force final response
+          tool_choice: toolCallCount === 0 ? "auto" : "none",
         });
 
         const choice = completion.choices[0];
@@ -84,15 +84,13 @@ export async function createAiAdapter(env: SymbioteEnv, config: PluginSettings):
         }
 
         const message = choice.message;
-
-        // Add the assistant's message to the conversation
         currentMessages.push(message);
 
         const {
           toolCallCount: nextToolCallCount,
           normalized,
           done,
-        } = await handleAssistantMessage<MentionAssessmentResponse>({
+        } = await handleAssistantMessage<NotificationAssessmentResponse>({
           message,
           currentMessages,
           octokit,
@@ -107,20 +105,19 @@ export async function createAiAdapter(env: SymbioteEnv, config: PluginSettings):
           if (normalized) {
             return {
               messages: [...currentMessages, { role: "assistant", content: JSON.stringify(normalized) }],
-              assessment: normalized
+              assessment: normalized,
             };
           }
         }
       }
     } catch (error) {
-      console.error(`[AI] Failed to classify mention`, { error });
+      console.error(`[AI] Failed to classify notification`, { error });
       return {
-        messages:[
-        ...currentMessages,
-        {
-          role: "assistant",
-          content: 
-`An error occurred while parsing the response into a JSON object, a default will be provided as well as details about the error.
+        messages: [
+          ...currentMessages,
+          {
+            role: "assistant",
+            content: `An error occurred while parsing the response into a JSON object, a default will be provided as well as details about the error.
 
 # DEFAULT RESPONSE
 
@@ -128,11 +125,11 @@ ${JSON.stringify(DEFAULT_ASSESSMENT)}
         
 # ERROR DETAILS
 
-${error instanceof Error ? error.message : String(error)}\n\n\n`.trim(),
-        },
-      ],
-      assessment: DEFAULT_ASSESSMENT,
-    }
+${error instanceof Error ? error.message : String(error)}`.trim(),
+          },
+        ],
+        assessment: DEFAULT_ASSESSMENT,
+      };
     }
     return {
       messages: [...currentMessages, { role: "assistant", content: JSON.stringify(DEFAULT_ASSESSMENT) }],
@@ -146,9 +143,9 @@ ${error instanceof Error ? error.message : String(error)}\n\n\n`.trim(),
     assessment,
     existingMessages,
   }: {
-    request: MentionAssessmentRequest;
+    request: NotificationAssessmentRequest;
     octokit: InstanceType<typeof customOctokit>;
-    assessment: MentionAssessmentResponse;
+    assessment: NotificationAssessmentResponse;
     existingMessages: ChatCompletionMessageParam[];
   }): Promise<{
     messages: ChatCompletionMessageParam[];
@@ -156,7 +153,7 @@ ${error instanceof Error ? error.message : String(error)}\n\n\n`.trim(),
   }> {
     const messages = buildSuggestedActionsMessages(request, assessment, existingMessages);
     let toolCallCount = 0;
-    const maxToolCalls = 10; // Limit tool usage to prevent infinite loops
+    const maxToolCalls = 10;
     let currentMessages = [...messages];
 
     try {
@@ -166,7 +163,7 @@ ${error instanceof Error ? error.message : String(error)}\n\n\n`.trim(),
           temperature: 0.2,
           messages: currentMessages,
           tools: GITHUB_TOOLS,
-          tool_choice: toolCallCount === maxToolCalls ? "none" : "auto", // Allow tools initially, then force final response
+          tool_choice: toolCallCount === maxToolCalls ? "none" : "auto",
         });
 
         const choice = completion.choices[0];
@@ -175,7 +172,6 @@ ${error instanceof Error ? error.message : String(error)}\n\n\n`.trim(),
         }
 
         const message = choice.message;
-
         currentMessages.push(message);
 
         const {
@@ -217,14 +213,12 @@ ${error instanceof Error ? error.message : String(error)}\n\n\n`.trim(),
   }
 
   function buildSuggestedActionsMessages(
-    request: MentionAssessmentRequest,
-    assessment: MentionAssessmentResponse,
+    request: NotificationAssessmentRequest,
+    assessment: NotificationAssessmentResponse,
     existingMessages: ChatCompletionMessageParam[]
   ): ChatCompletionMessageParam[] {
-    // replace the first system message with the suggested actions system prompt
     existingMessages.find((message) => message.role === "system")!.content = SUGGESTED_ACTIONS_SYSTEM_PROMPT("write", request.hostUsername);
 
-    // the most recent message was the assessment response
     return [
       ...existingMessages,
       {
@@ -251,19 +245,48 @@ Respond with a final response detailed JSON object describing the results of the
   }
 
   return {
-    classifyMention,
+    classifyNotification,
     executeSuggestedActions,
   };
 }
 
-function buildMentionMessages(request: Omit<MentionAssessmentRequest, "octokit">): ChatCompletionMessageParam[] {
-  const { hostUsername, ...rest } = request;
+function buildNotificationMessages(request: Omit<NotificationAssessmentRequest, "octokit">): ChatCompletionMessageParam[] {
+  const { hostUsername, notification, latestCommentBody, latestCommentAuthor } = request;
+
   const payload = {
     hostUsername,
-    notification: rest,
+    notification: {
+      id: notification.id,
+      reason: notification.reason,
+      unread: notification.unread,
+      updated_at: notification.updated_at,
+      repository: notification.repository
+        ? {
+            full_name: notification.repository.full_name,
+            private: notification.repository.private,
+            fork: notification.repository.fork,
+            owner: notification.repository.owner?.login,
+            html_url: notification.repository.html_url,
+          }
+        : null,
+      subject: notification.subject
+        ? {
+            type: notification.subject.type,
+            title: notification.subject.title,
+            url: notification.subject.url,
+            latest_comment_url: notification.subject.latest_comment_url,
+          }
+        : null,
+    },
+    latestComment: latestCommentBody
+      ? {
+          body: latestCommentBody,
+          author: latestCommentAuthor,
+        }
+      : null,
   };
 
-  const systemPrompt = MENTION_CLASSIFICATION_SYSTEM_PROMPT(hostUsername);
+  const systemPrompt = NOTIFICATION_CLASSIFICATION_SYSTEM_PROMPT(hostUsername);
 
   return [
     {
@@ -277,7 +300,7 @@ function buildMentionMessages(request: Omit<MentionAssessmentRequest, "octokit">
   ];
 }
 
-function safeParse<T extends MentionAssessmentResponse | SuggestedActionsResponse>(content: string): T | string {
+function safeParse<T extends NotificationAssessmentResponse | SuggestedActionsResponse>(content: string): T | string {
   try {
     return JSON.parse(content) as T;
   } catch (error) {
@@ -286,7 +309,7 @@ function safeParse<T extends MentionAssessmentResponse | SuggestedActionsRespons
   }
 }
 
-function normalizeAssessment(candidate: Partial<MentionAssessmentResponse>): MentionAssessmentResponse {
+function normalizeAssessment(candidate: Partial<NotificationAssessmentResponse>): NotificationAssessmentResponse {
   return {
     shouldAct: typeof candidate.shouldAct === "boolean" ? candidate.shouldAct : DEFAULT_ASSESSMENT.shouldAct,
     priority: isPriority(candidate.priority) ? candidate.priority : DEFAULT_ASSESSMENT.priority,
@@ -299,15 +322,15 @@ function normalizeAssessment(candidate: Partial<MentionAssessmentResponse>): Men
   };
 }
 
-function isPriority(value: unknown): value is MentionPriority {
+function isPriority(value: unknown): value is AssessmentPriority {
   return value === "low" || value === "medium" || value === "high";
 }
 
-function isClassification(value: unknown): value is MentionAssessmentResponse["classification"] {
+function isClassification(value: unknown): value is NotificationAssessmentResponse["classification"] {
   return value === "respond" || value === "investigate" || value === "ignore";
 }
 
-async function handleAssistantMessage<T extends MentionAssessmentResponse | SuggestedActionsResponse>({
+async function handleAssistantMessage<T extends NotificationAssessmentResponse | SuggestedActionsResponse>({
   message,
   currentMessages,
   octokit,
@@ -372,4 +395,3 @@ async function handleAssistantMessage<T extends MentionAssessmentResponse | Sugg
 
   return { toolCallCount: updatedCount, normalized: parsed, done: true };
 }
-

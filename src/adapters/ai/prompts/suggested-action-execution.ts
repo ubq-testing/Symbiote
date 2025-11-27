@@ -1,4 +1,4 @@
-import { EXECUTION_MODULE_SYSTEM_PROMPT } from "./mention-classification";
+import { EXECUTION_MODULE_SYSTEM_PROMPT } from "./notification-classification";
 import {
   BEHAVIOR_HEADLINES,
   COMMENT_USAGE_GUIDELINES,
