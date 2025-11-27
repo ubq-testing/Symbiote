@@ -188,7 +188,7 @@ export const GITHUB_WRITE_ONLY_TOOLS = [
           repo: { type: "string", description: "Repository name" },
           title: { type: "string", description: "Pull request title" },
           head: { type: "string", description: "The name of the branch where your changes are implemented" },
-          base: { type: "string", description: "The name of the branch you want the changes pulled into", default: "main" },
+          base: { type: "string", description: "The name of the branch you want the changes pulled into" },
           body: { type: "string", description: "The contents of the pull request" },
           draft: { type: "boolean", description: "Whether to create the pull request as a draft", default: false },
         },

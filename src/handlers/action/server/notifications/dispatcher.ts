@@ -1,6 +1,5 @@
 import { Context } from "../../../../types/index";
 import type { Notification } from "../event-poller";
-import { createRepoOctokit } from "../../../octokit";
 import { NotificationAssessmentRequest } from "../../../../adapters/ai/prompts/types";
 
 export async function dispatchNotification({
@@ -40,7 +39,6 @@ export async function dispatchNotification({
   //     repo,
   //   });
   // } else {
-  //   octokit = context.hostOctokit;
   // }
 
   const request: NotificationAssessmentRequest = {

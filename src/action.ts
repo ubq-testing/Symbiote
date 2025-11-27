@@ -6,10 +6,25 @@ import { WorkflowEnv, workflowEnvSchema } from "./types/env";
 import { validateEnvironment } from "./utils/env";
 import { Command } from "./types/command";
 import { createAdapters } from "./adapters/create-adapters";
-import { createAppOctokit, createUserOctokit } from "./handlers/octokit";
+import { createUserOctokit } from "./handlers/octokit";
+import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 
 async function runAction() {
     process.env = validateEnvironment(process.env as Record<string, string>, "action") as unknown as Record<string, string>;
+    const pluginInputs = (await import("@actions/github")).context.payload.inputs;
+    const authToken = pluginInputs?.authToken;
+    if (!authToken) {
+        console.error("Auth token not found", pluginInputs);
+        throw new Error("Auth token not found");
+    }
+    const appOctokit = new customOctokit({ auth: authToken });
+    const userOctokit = await appOctokit.rest.users.getAuthenticated();
+    if (!userOctokit.data.login) {
+        throw new Error("User not found");
+    }
+
+    // if this works I can remove userOctokit and just use appOctokit
+    const hostOctokit = await createUserOctokit(authToken);
 
     try {
         await createActionsPlugin<
@@ -22,8 +37,8 @@ async function runAction() {
                 const adapters = await createAdapters(context.env, context.config);
                 return runSymbiote<SupportedEvents, "action">({
                     ...context,
-                    appOctokit: await createAppOctokit(context.env),
-                    hostOctokit: await createUserOctokit(context.env.SYMBIOTE_HOST_PAT),
+                    appOctokit,
+                    hostOctokit,
                     runtime: "action",
                     adapters,
                 })
