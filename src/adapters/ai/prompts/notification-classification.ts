@@ -35,27 +35,6 @@ You will receive a JSON object with the full GitHub notification and optional la
   "latestComment": { "body": "comment text", "author": "username" } | null
 }
 
-# Notification Reasons
-
-- **mention**: Host was @mentioned directly
-- **team_mention**: Host's team was mentioned
-- **comment**: Host commented or is subscribed to a thread with new comments
-- **review_requested**: Host was requested to review a PR
-- **author**: Activity on a thread the host created
-- **assign**: Host was assigned to the issue/PR
-- **state_change**: Issue/PR was opened, closed, merged, etc.
-- **subscribed**: Host is watching the repo or thread
-- **manual**: Host manually subscribed to the thread
-
-# Subject Types
-
-- **PullRequest**: Pull request activity
-- **Issue**: Issue activity
-- **Commit**: Commit activity (pushes, comments on commits)
-- **Release**: Release published
-- **Discussion**: GitHub Discussions activity
-- **RepositoryInvitation**: Invitation to collaborate
-
 BEHAVIOR GUIDELINES:
 ${formatList(CLASSIFICATION_BEHAVIOR_GUIDELINES)}
 

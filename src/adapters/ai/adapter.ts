@@ -1,13 +1,15 @@
 import OpenAI from "openai";
-import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
+import type { ChatCompletionMessageParam, ChatCompletionTool } from "openai/resources/chat/completions";
 import { WorkerEnv, WorkflowEnv } from "../../types/env";
 import { PluginSettings } from "../../types/plugin-input";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { executeGitHubTool, GITHUB_READ_ONLY_TOOLS, GITHUB_TOOLS } from "./tools";
+import { TELEGRAM_TOOLS, executeTelegramTool, isTelegramTool } from "./telegram-tools";
 import { NOTIFICATION_CLASSIFICATION_SYSTEM_PROMPT } from "./prompts/notification-classification";
 import { SUGGESTED_ACTIONS_SYSTEM_PROMPT } from "./prompts/suggested-action-execution";
 import { formatList } from "./prompts/shared";
 import { NotificationAssessmentRequest, NotificationAssessmentResponse, SuggestedActionsResponse, AssessmentPriority } from "./prompts/types";
+import { TelegramAdapter } from "../telegram/adapter";
 
 type SymbioteEnv = WorkerEnv | WorkflowEnv;
 
@@ -46,7 +48,11 @@ const DEFAULT_SUGGESTED_ACTIONS_RESPONSE: SuggestedActionsResponse = {
   results: [],
 };
 
-export async function createAiAdapter(env: SymbioteEnv, config: PluginSettings): Promise<AiAdapter | null> {
+export async function createAiAdapter(
+  env: SymbioteEnv,
+  config: PluginSettings,
+  telegram?: TelegramAdapter | null
+): Promise<AiAdapter | null> {
   const aiConfig = config.aiConfig;
   if (!aiConfig) {
     return null;
@@ -56,6 +62,12 @@ export async function createAiAdapter(env: SymbioteEnv, config: PluginSettings):
     apiKey: env.AI_API_KEY,
     baseURL: aiConfig.baseUrl,
   });
+
+  // Build available tools based on what adapters are available
+  const allTools: ChatCompletionTool[] = [
+    ...GITHUB_TOOLS,
+    ...(telegram ? TELEGRAM_TOOLS : []),
+  ];
 
   async function classifyNotification(request: NotificationAssessmentRequest): Promise<{
     messages: ChatCompletionMessageParam[];
@@ -151,7 +163,7 @@ ${error instanceof Error ? error.message : String(error)}`.trim(),
     messages: ChatCompletionMessageParam[];
     response: SuggestedActionsResponse;
   }> {
-    const messages = buildSuggestedActionsMessages(request, assessment, existingMessages);
+    const messages = buildSuggestedActionsMessages(request, assessment, existingMessages, !!telegram);
     let toolCallCount = 0;
     const maxToolCalls = 10;
     let currentMessages = [...messages];
@@ -162,7 +174,7 @@ ${error instanceof Error ? error.message : String(error)}`.trim(),
           model: aiConfig.model,
           temperature: 0.2,
           messages: currentMessages,
-          tools: GITHUB_TOOLS,
+          tools: allTools,
           tool_choice: toolCallCount === maxToolCalls ? "none" : "auto",
         });
 
@@ -182,6 +194,7 @@ ${error instanceof Error ? error.message : String(error)}`.trim(),
           message,
           currentMessages,
           octokit,
+          telegram,
           toolCallCount,
           defaultResponse: DEFAULT_SUGGESTED_ACTIONS_RESPONSE,
           env,
@@ -212,43 +225,45 @@ ${error instanceof Error ? error.message : String(error)}`.trim(),
     };
   }
 
-  function buildSuggestedActionsMessages(
-    request: NotificationAssessmentRequest,
-    assessment: NotificationAssessmentResponse,
-    existingMessages: ChatCompletionMessageParam[]
-  ): ChatCompletionMessageParam[] {
-    existingMessages.find((message) => message.role === "system")!.content = SUGGESTED_ACTIONS_SYSTEM_PROMPT("write", request.hostUsername);
+  return {
+    classifyNotification,
+    executeSuggestedActions,
+  };
+}
 
-    return [
-      ...existingMessages,
-      {
-        role: "user",
-        content: `
+function buildSuggestedActionsMessages(
+  request: NotificationAssessmentRequest,
+  assessment: NotificationAssessmentResponse,
+  existingMessages: ChatCompletionMessageParam[],
+  telegramEnabled: boolean
+): ChatCompletionMessageParam[] {
+  existingMessages.find((message) => message.role === "system")!.content = SUGGESTED_ACTIONS_SYSTEM_PROMPT("write", request.hostUsername, telegramEnabled);
+
+  return [
+    ...existingMessages,
+    {
+      role: "user",
+      content: `
 Using the existing context, begin iterating through the following action items and execute them one by one.
 
 ${formatList(assessment.suggestedActions)}
 
 Respond with a final response detailed JSON object describing the results of the actions, like this:
 {
-  "finalResponse": "final response to the user",
-  "results": [
-    {
-      "action": "action_name",
-      "result": "success" | "failure",
-      "reason": "reason for the result",
+"finalResponse": "final response to the user",
+"results": [
+  {
+    "action": "action_name",
+    "result": "success" | "failure",
+    "reason": "reason for the result",
+  },
+],
+}
+      `.trim(),
     },
-  ],
+  ];
 }
-        `.trim(),
-      },
-    ];
-  }
 
-  return {
-    classifyNotification,
-    executeSuggestedActions,
-  };
-}
 
 function buildNotificationMessages(request: Omit<NotificationAssessmentRequest, "octokit">): ChatCompletionMessageParam[] {
   const { hostUsername, notification, latestCommentBody, latestCommentAuthor } = request;
@@ -334,6 +349,7 @@ async function handleAssistantMessage<T extends NotificationAssessmentResponse |
   message,
   currentMessages,
   octokit,
+  telegram,
   toolCallCount,
   defaultResponse,
   env,
@@ -341,6 +357,7 @@ async function handleAssistantMessage<T extends NotificationAssessmentResponse |
   message: OpenAI.Chat.Completions.ChatCompletionMessage;
   currentMessages: ChatCompletionMessageParam[];
   octokit: InstanceType<typeof customOctokit>;
+  telegram?: TelegramAdapter | null;
   toolCallCount: number;
   defaultResponse: T;
   env: SymbioteEnv;
@@ -356,7 +373,15 @@ async function handleAssistantMessage<T extends NotificationAssessmentResponse |
           await new Promise((resolve) => setTimeout(resolve, 500));
         }
 
-        const toolResult = await executeGitHubTool(octokit, toolCall, env);
+        let toolResult: unknown;
+
+        // Route to appropriate tool executor
+        if (isTelegramTool(toolCall.function.name) && telegram) {
+          toolResult = await executeTelegramTool(telegram, toolCall);
+        } else {
+          toolResult = await executeGitHubTool(octokit, toolCall, env);
+        }
+
         currentMessages.push({
           role: "tool",
           tool_call_id: toolCall.id,

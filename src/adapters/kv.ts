@@ -2,7 +2,7 @@ import { AtomicOperation, Kv} from "@deno/kv";
 import { WorkerEnv, WorkflowEnv } from "../types/index";
 
 function isLocalOrWorkflowEnv(env: WorkflowEnv | WorkerEnv): env is WorkflowEnv & { NODE_ENV: "local" } {
-  return "GITHUB_RUN_ID" in env || env.NODE_ENV === "local" || env.NODE_ENV === "development";
+  return "GITHUB_RUN_ID" in env || env.NODE_ENV === "local";
 }
 
 export class KvAdapter {
