@@ -495,8 +495,6 @@ export async function executeGitHubTool(
 
         return {
           repository: {
-            owner: repository.data.owner.login,
-            name: repository.data.name,
             full_name: repository.data.full_name,
             organization: repository.data.organization?.login,
             description: repository.data.description,
@@ -517,7 +515,7 @@ export async function executeGitHubTool(
       }
 
       case "fetch_user_repositories": {
-        const { username, type = "owner", sort = "updated", per_page = 30 } = params;
+        const { username, type = "owner", sort = "updated", per_page = 100 } = params;
         const repos = await octokit.rest.repos.listForUser({
           username,
           type,
@@ -544,7 +542,7 @@ export async function executeGitHubTool(
       }
 
       case "fetch_forks": {
-        const { owner, repo, sort = "newest", per_page = 30 } = params;
+        const { owner, repo, sort = "newest", per_page = 100 } = params;
         const forks = await octokit.rest.repos.listForks({
           owner,
           repo,
@@ -557,13 +555,10 @@ export async function executeGitHubTool(
             owner: fork.owner.login,
             name: fork.name,
             full_name: fork.full_name,
-            description: fork.description,
             html_url: fork.html_url,
             created_at: fork.created_at,
             updated_at: fork.updated_at,
             pushed_at: fork.pushed_at,
-            stargazers_count: fork.stargazers_count,
-            forks_count: fork.forks_count,
           })),
         };
       }

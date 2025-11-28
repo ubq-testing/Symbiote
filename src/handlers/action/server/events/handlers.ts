@@ -1,32 +1,39 @@
 import { Context } from "../../../../types/index";
-import { UserEvent } from "../event-poller";
+import { UserEvent } from "../../../../types/github";
+import { dispatchEvent } from "./dispatcher";
 
 /**
  * Handles kernel-forwarded events (repos with ubiquity app installed)
- * Shell implementation - logs the event
+ * Routes through AI pipeline for classification and potential action
  */
 export async function handleKernelForwardedEvent(context: Context<"server.start" | "server.restart", "action">, event: UserEvent): Promise<void> {
-  const { logger } = context;
-  logger.info(`[KERNEL-FORWARDED] Handling event ${event.id} from ${event.repo?.name}`);
-  // TODO: Forward event to kernel via existing infrastructure
+  await dispatchEvent({
+    context,
+    event,
+    route: "kernel-forwarded",
+  });
 }
 
 /**
  * Handles safe action events (public repos without ubiquity app)
- * Shell implementation - logs the event
+ * Routes through AI pipeline for classification and potential action
  */
 export async function handleSafeActionEvent(context: Context<"server.start" | "server.restart", "action">, event: UserEvent): Promise<void> {
-  const { logger } = context;
-  logger.info(`[SAFE-ACTION] Handling event ${event.id} from ${event.repo?.name}`);
-  // TODO: Use app authentication to handle event
+  await dispatchEvent({
+    context,
+    event,
+    route: "safe-action",
+  });
 }
 
 /**
  * Handles unsafe action events (private repos or sensitive actions)
- * Shell implementation - logs the event
+ * Routes through AI pipeline for classification and potential action
  */
 export async function handleUnsafeActionEvent(context: Context<"server.start" | "server.restart", "action">, event: UserEvent): Promise<void> {
-  const { logger } = context;
-  logger.info(`[UNSAFE-ACTION] Handling event ${event.id} from ${event.repo?.name}`);
-  // TODO: Queue event for main workflow with user PAT authentication
+  await dispatchEvent({
+    context,
+    event,
+    route: "unsafe-action",
+  });
 }

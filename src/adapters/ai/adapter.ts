@@ -5,28 +5,52 @@ import { PluginSettings } from "../../types/plugin-input";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { executeGitHubTool, GITHUB_READ_ONLY_TOOLS, GITHUB_TOOLS } from "./tools";
 import { TELEGRAM_TOOLS, executeTelegramTool, isTelegramTool } from "./telegram-tools";
-import { NOTIFICATION_CLASSIFICATION_SYSTEM_PROMPT } from "./prompts/notification-classification";
+import { NOTIFICATION_CLASSIFICATION_SYSTEM_PROMPT, EVENT_CLASSIFICATION_SYSTEM_PROMPT } from "./prompts/notification-classification";
 import { SUGGESTED_ACTIONS_SYSTEM_PROMPT } from "./prompts/suggested-action-execution";
 import { formatList } from "./prompts/shared";
-import { NotificationAssessmentRequest, NotificationAssessmentResponse, SuggestedActionsResponse, AssessmentPriority } from "./prompts/types";
+import {
+  NotificationAssessmentRequest,
+  EventAssessmentRequest,
+  AssessmentRequest,
+  AssessmentResponse,
+  SuggestedActionsResponse,
+  AssessmentPriority,
+  isNotificationRequest,
+  isEventRequest,
+} from "./prompts/types";
 import { TelegramAdapter } from "../telegram/adapter";
 
 type SymbioteEnv = WorkerEnv | WorkflowEnv;
 
 export interface AiAdapter {
+  /**
+   * Unified classification method - handles both notifications and events
+   */
+  classify(request: AssessmentRequest): Promise<{
+    messages: ChatCompletionMessageParam[];
+    assessment: AssessmentResponse;
+  }>;
+
+  /**
+   * @deprecated Use classify() instead
+   */
   classifyNotification(request: NotificationAssessmentRequest): Promise<{
     messages: ChatCompletionMessageParam[];
-    assessment: NotificationAssessmentResponse;
+    assessment: AssessmentResponse;
   }>;
+
+  /**
+   * Execute suggested actions from an assessment
+   */
   executeSuggestedActions({
     request,
     octokit,
     assessment,
     existingMessages,
   }: {
-    request: NotificationAssessmentRequest;
+    request: AssessmentRequest;
     octokit: InstanceType<typeof customOctokit>;
-    assessment: NotificationAssessmentResponse;
+    assessment: AssessmentResponse;
     existingMessages: ChatCompletionMessageParam[];
   }): Promise<{
     messages: ChatCompletionMessageParam[];
@@ -34,7 +58,7 @@ export interface AiAdapter {
   }>;
 }
 
-const DEFAULT_ASSESSMENT: NotificationAssessmentResponse = {
+const DEFAULT_ASSESSMENT: AssessmentResponse = {
   shouldAct: false,
   priority: "low",
   confidence: 0.1,
@@ -69,16 +93,20 @@ export async function createAiAdapter(
     ...(telegram ? TELEGRAM_TOOLS : []),
   ];
 
-  async function classifyNotification(request: NotificationAssessmentRequest): Promise<{
+  /**
+   * Unified classification method - handles both notifications and events
+   */
+  async function classify(request: AssessmentRequest): Promise<{
     messages: ChatCompletionMessageParam[];
-    assessment: NotificationAssessmentResponse;
+    assessment: AssessmentResponse;
   }> {
     const { octokit, ...rest } = request;
-    const messages = buildNotificationMessages(rest);
+    const messages = buildClassificationMessages(rest);
     const maxToolCalls = 5;
     let toolCallCount = 0;
 
     let currentMessages: ChatCompletionMessageParam[] = [...messages];
+    const inputKind = request.kind;
 
     try {
       while (toolCallCount < maxToolCalls) {
@@ -102,7 +130,7 @@ export async function createAiAdapter(
           toolCallCount: nextToolCallCount,
           normalized,
           done,
-        } = await handleAssistantMessage<NotificationAssessmentResponse>({
+        } = await handleAssistantMessage<AssessmentResponse>({
           message,
           currentMessages,
           octokit,
@@ -123,7 +151,7 @@ export async function createAiAdapter(
         }
       }
     } catch (error) {
-      console.error(`[AI] Failed to classify notification`, { error });
+      console.error(`[AI] Failed to classify ${inputKind}`, { error });
       return {
         messages: [
           ...currentMessages,
@@ -149,15 +177,25 @@ ${error instanceof Error ? error.message : String(error)}`.trim(),
     };
   }
 
+  /**
+   * @deprecated Use classify() instead - kept for backward compatibility
+   */
+  async function classifyNotification(request: NotificationAssessmentRequest): Promise<{
+    messages: ChatCompletionMessageParam[];
+    assessment: AssessmentResponse;
+  }> {
+    return classify(request);
+  }
+
   async function executeSuggestedActions({
     request,
     octokit,
     assessment,
     existingMessages,
   }: {
-    request: NotificationAssessmentRequest;
+    request: AssessmentRequest;
     octokit: InstanceType<typeof customOctokit>;
-    assessment: NotificationAssessmentResponse;
+    assessment: AssessmentResponse;
     existingMessages: ChatCompletionMessageParam[];
   }): Promise<{
     messages: ChatCompletionMessageParam[];
@@ -226,14 +264,15 @@ ${error instanceof Error ? error.message : String(error)}`.trim(),
   }
 
   return {
+    classify,
     classifyNotification,
     executeSuggestedActions,
   };
 }
 
 function buildSuggestedActionsMessages(
-  request: NotificationAssessmentRequest,
-  assessment: NotificationAssessmentResponse,
+  request: AssessmentRequest,
+  assessment: AssessmentResponse,
   existingMessages: ChatCompletionMessageParam[],
   telegramEnabled: boolean
 ): ChatCompletionMessageParam[] {
@@ -264,11 +303,22 @@ Respond with a final response detailed JSON object describing the results of the
   ];
 }
 
+/**
+ * Builds classification messages for either notification or event input
+ */
+function buildClassificationMessages(request: Omit<AssessmentRequest, "octokit">): ChatCompletionMessageParam[] {
+  if (isNotificationRequest(request as AssessmentRequest)) {
+    return buildNotificationMessages(request as Omit<NotificationAssessmentRequest, "octokit">);
+  } else {
+    return buildEventMessages(request as Omit<EventAssessmentRequest, "octokit">);
+  }
+}
 
 function buildNotificationMessages(request: Omit<NotificationAssessmentRequest, "octokit">): ChatCompletionMessageParam[] {
   const { hostUsername, notification, latestCommentBody, latestCommentAuthor } = request;
 
   const payload = {
+    kind: "notification",
     hostUsername,
     notification: {
       id: notification.id,
@@ -315,7 +365,62 @@ function buildNotificationMessages(request: Omit<NotificationAssessmentRequest, 
   ];
 }
 
-function safeParse<T extends NotificationAssessmentResponse | SuggestedActionsResponse>(content: string): T | string {
+function buildEventMessages(request: Omit<EventAssessmentRequest, "octokit">): ChatCompletionMessageParam[] {
+  const { hostUsername, event } = request;
+
+  const stripUrlsFromObject = (obj: any) => {
+    if (typeof obj === "object" && obj !== null) {
+      for (const key in obj) {
+        if (key.endsWith("_url") && !key.toLowerCase().includes("html_url")) {
+          delete obj[key];
+        }
+      }
+    }
+  };
+
+  const payload = {
+    kind: "event",
+    hostUsername,
+    event: {
+      id: event.id,
+      type: event.type,
+      created_at: event.created_at,
+      actor: event.actor
+        ? {
+            login: event.actor.login,
+            avatar_url: event.actor.avatar_url,
+          }
+        : null,
+      repo: event.repo
+        ? {
+            name: event.repo.name,
+            url: event.repo.url,
+          }
+        : null,
+      org: event.org
+        ? {
+            login: event.org.login,
+          }
+        : null,
+      payload: stripUrlsFromObject(event.payload),
+    },
+  };
+
+  const systemPrompt = EVENT_CLASSIFICATION_SYSTEM_PROMPT(hostUsername);
+
+  return [
+    {
+      role: "system",
+      content: systemPrompt,
+    },
+    {
+      role: "user",
+      content: JSON.stringify(payload, null, 2),
+    },
+  ];
+}
+
+function safeParse<T extends AssessmentResponse | SuggestedActionsResponse>(content: string): T | string {
   try {
     return JSON.parse(content) as T;
   } catch (error) {
@@ -324,7 +429,7 @@ function safeParse<T extends NotificationAssessmentResponse | SuggestedActionsRe
   }
 }
 
-function normalizeAssessment(candidate: Partial<NotificationAssessmentResponse>): NotificationAssessmentResponse {
+function normalizeAssessment(candidate: Partial<AssessmentResponse>): AssessmentResponse {
   return {
     shouldAct: typeof candidate.shouldAct === "boolean" ? candidate.shouldAct : DEFAULT_ASSESSMENT.shouldAct,
     priority: isPriority(candidate.priority) ? candidate.priority : DEFAULT_ASSESSMENT.priority,
@@ -341,11 +446,11 @@ function isPriority(value: unknown): value is AssessmentPriority {
   return value === "low" || value === "medium" || value === "high";
 }
 
-function isClassification(value: unknown): value is NotificationAssessmentResponse["classification"] {
+function isClassification(value: unknown): value is AssessmentResponse["classification"] {
   return value === "respond" || value === "investigate" || value === "ignore";
 }
 
-async function handleAssistantMessage<T extends NotificationAssessmentResponse | SuggestedActionsResponse>({
+async function handleAssistantMessage<T extends AssessmentResponse | SuggestedActionsResponse>({
   message,
   currentMessages,
   octokit,

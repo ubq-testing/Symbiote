@@ -1,11 +1,8 @@
 import { Context } from "../../../types/index";
-import { RestEndpointMethodTypes } from "@ubiquity-os/plugin-sdk/octokit";
 import { CallbackResult } from "../../../types/callbacks";
+import { UserEvent, Notification } from "../../../types/github";
 import { dispatchNotification } from "./notifications/dispatcher";
 import { determineEventRouting, determineNotificationRouting, handleRouting } from "./routing";
-
-export type UserEvent = RestEndpointMethodTypes["activity"]["listPublicEventsForUser"]["response"]["data"][0];
-export type Notification = RestEndpointMethodTypes["activity"]["listNotificationsForAuthenticatedUser"]["response"]["data"][0];
 
 const THREE_DAYS_AGO = new Date(Date.now() - 1000 * 60 * 60 * 24 * 3);
 const NOW = new Date(Date.now());

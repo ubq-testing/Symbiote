@@ -1,5 +1,5 @@
 import { Context } from "../../../../types/index";
-import type { Notification } from "../event-poller";
+import type { Notification } from "../../../../types/github";
 import { NotificationAssessmentRequest } from "../../../../adapters/ai/prompts/types";
 import { createRepoOctokit } from "../../../octokit";
 
@@ -44,6 +44,7 @@ export async function dispatchNotification({
   }
 
   const request: NotificationAssessmentRequest = {
+    kind: "notification",
     hostUsername: context.env.SYMBIOTE_HOST.USERNAME,
     notification,
     latestCommentBody: latestComment?.body ?? null,
@@ -51,7 +52,7 @@ export async function dispatchNotification({
     octokit,
   };
 
-  const { assessment, messages } = await adapters.ai.classifyNotification(request);
+  const { assessment, messages } = await adapters.ai.classify(request);
 
   logger.info(`[NOTIFICATIONS] AI assessment completed for ${notificationId}`, {
     assessment,
