@@ -1,14 +1,12 @@
-LOG_LEVEL="info"
-
-SUPABASE_URL=https://xyz.supabase.co
-SUPABASE_KEY=xyz
-
-APP_ID=1234567
-APP_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n.....\n-----END PRIVATE KEY-----\n"
-KERNEL_PUBLIC_KEY="-----BEGIN PRIVATE KEY-----\n.....\n-----END PRIVATE KEY-----\n"
-
+APP_ID=123456
+APP_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n....\n-----END PUBLIC KEY-----"
+KERNEL_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n....\n-----END PUBLIC KEY-----\n"
+LOG_LEVEL="debug"
 NODE_ENV=local
-SYMBIOTE_HOST='{"USERNAME": "keyrxng", "FORKED_REPO": "ubq-testing/Symbiote"}'
-
-WORKER_SECRET="secret"
-WORKER_URL=https://smee.io/xyz
+AI_API_KEY=sk-or.....
+OAUTH='{"REDIRECT_URI": "http://localhost:4000/oauth/callback", "CLIENT_ID":"123abc", "CLIENT_SECRET":"123abc", "TOKEN_ENCRYPTION_KEY": "O3VuEgHIzGVK4HM4pWhwtdXo2JJni/ABynTkKoU+Fng="}'
+WORKER='{"SECRET":"abcd123", "URL":"https://smee.io/xyz"}'
+SYMBIOTE_HOST='{"USERNAME": "keyrxng", "FORKED_REPO": "ubq-testing/Symbiote", "HOST_PAT":"ghp_..."}'
+TELEGRAM='{"HOST_USERNAME":"keyrxng","BOT_TOKEN":"12345678:abcde...", "WEBHOOK_SECRET": "123abc", "WEBHOOK_URL":"https://smee.io/xyz"}'
+DENO_KV_ACCESS_TOKEN=ddp_....
+DENO_KV_UUID=12345678-1234-1234-1234-12345678

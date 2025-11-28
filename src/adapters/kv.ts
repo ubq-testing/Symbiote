@@ -1,6 +1,10 @@
 import { AtomicOperation, Kv} from "@deno/kv";
 import { WorkerEnv, WorkflowEnv } from "../types/index";
 
+function isLocalOrWorkflowEnv(env: WorkflowEnv | WorkerEnv): env is WorkflowEnv & { NODE_ENV: "local" } {
+  return "GITHUB_RUN_ID" in env || env.NODE_ENV === "local";
+}
+
 export class KvAdapter {
   private _kv: Deno.Kv | Kv;
   constructor(kv: Deno.Kv | Kv) {
@@ -59,6 +63,11 @@ export class KvAdapter {
 }
 
 export async function createKvAdapter(env: WorkflowEnv | WorkerEnv): Promise<KvAdapter> {
+  if(isLocalOrWorkflowEnv(env)) {
+    const { openKv } = await import("@deno/kv");
+    return new KvAdapter(await openKv(`https://api.deno.com/databases/${env.DENO_KV_UUID}/connect`));
+  }
+
   // First check if we're in Deno runtime - if so, use the built-in KV API
   if (typeof Deno !== "undefined" && Deno.openKv) {
     const kv = await Deno.openKv();
@@ -68,6 +77,5 @@ export async function createKvAdapter(env: WorkflowEnv | WorkerEnv): Promise<KvA
     return new KvAdapter(kv);
   }
 
-    const { openKv } = await import("@deno/kv");
-    return new KvAdapter(await openKv(`https://api.deno.com/databases/${env.DENO_KV_UUID}/connect`));
+  throw new Error("KV store is not available");
 }
