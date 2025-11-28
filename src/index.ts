@@ -21,7 +21,12 @@ export async function runSymbiote<
     const results = await handleCallbacks<T, "worker">(context, workerCallbacks);
 
     if ("status" in results) {
-      throw logger.error(`Fatal error in callbacks: ${results.reason}`);
+      logger.warn(`Fatal error in callbacks: ${results.reason}`);
+      return {
+        status: results.status,
+        reason: results.reason,
+        content: JSON.stringify(results),
+      };
     }
 
     callbackResults = results;
@@ -30,7 +35,13 @@ export async function runSymbiote<
     const results = await handleCallbacks<T, "action">(context, actionCallbacks);
 
     if ("status" in results) {
-      throw logger.error(`Fatal error in callbacks: ${results.reason}`);
+      logger.warn(`Fatal error in callbacks: ${results.reason}`);
+      return {
+        status: results.status,
+        reason: results.reason,
+        content: JSON.stringify(results),
+      };
+    
     }
 
     callbackResults = results;

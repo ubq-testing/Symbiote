@@ -1,5 +1,6 @@
 import { AtomicOperation, Kv} from "@deno/kv";
 import { WorkerEnv, WorkflowEnv } from "../types/index";
+import { deserialize, serialize } from "node:v8";
 
 function isLocalOrWorkflowEnv(env: WorkflowEnv | WorkerEnv): env is WorkflowEnv & { NODE_ENV: "local" } {
   return "GITHUB_RUN_ID" in env || env.NODE_ENV === "local";
@@ -65,7 +66,11 @@ export class KvAdapter {
 export async function createKvAdapter(env: WorkflowEnv | WorkerEnv): Promise<KvAdapter> {
   if(isLocalOrWorkflowEnv(env)) {
     const { openKv } = await import("@deno/kv");
-    return new KvAdapter(await openKv(`https://api.deno.com/databases/${env.DENO_KV_UUID}/connect`));
+    return new KvAdapter(await openKv(`https://api.deno.com/databases/${env.DENO_KV_UUID}/connect`, {
+      implementation: "remote",
+      encodeV8: serialize,
+      decodeV8: deserialize,
+    }));
   }
 
   // First check if we're in Deno runtime - if so, use the built-in KV API
