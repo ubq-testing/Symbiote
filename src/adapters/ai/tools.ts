@@ -20,7 +20,7 @@ const TOOLS = {
 "fetch_repository_details": async ({owner, repo}: {owner: string, repo: string}) => {},
 "fetch_user_repositories": async ({username, type, sort, per_page}: {username: string, type?: string, sort?: string, per_page?: number}) => {},
 "fetch_forks": async ({owner, repo, sort, per_page}: {owner: string, repo: string, sort?: string, per_page?: number}) => {},
-"_installation": async ({owner, repo}: {owner: string, repo: string}) => {},
+"fetch_branches": async ({owner, repo}: {owner: string, repo: string}) => {},
 "create_pull_request": async ({owner, repo, title, head, base, body, draft = false}: {owner: string, repo: string, title: string, head: string, base?: string, body: string, draft?: boolean}) => {},
 "create_issue": async ({owner, repo, title, body, labels, assignees}: {owner: string, repo: string, title: string, body: string, labels: string[], assignees: string[]}) => {},
 "create_comment": async ({owner, repo, issue_number, body}: {owner: string, repo: string, issue_number: number, body: string}) => {},
@@ -33,6 +33,21 @@ const TOOLS = {
 }
 
 export const GITHUB_READ_ONLY_TOOLS = [
+  {
+    type: "function" as const,
+    function: {
+      name: "fetch_branches" as const,
+      description: "Fetch branches from a repository",
+      parameters: {
+        type: "object",
+        properties: {
+          owner: { type: "string", description: "Repository owner" },
+          repo: { type: "string", description: "Repository name" },
+        },
+        required: ["owner", "repo"],
+      },
+    },
+  },
   {
     type: "function" as const,
     function: {
@@ -650,6 +665,45 @@ export async function executeGitHubTool(
                 deletions: file.deletions,
               })) || [],
           },
+        };
+      }
+
+      case "fetch_recent_commits": {
+        const { owner, repo, limit = 10 } = params;
+        const commits = await octokit.rest.repos.listCommits({
+          owner,
+          repo,
+          per_page: limit,
+        });
+
+        const slim = commits.data.map((commit) => ({
+            sha: commit.sha,
+            message: commit.commit.message,
+            author: commit.commit.author?.name,
+            committer: commit.commit.committer?.name,
+            date: commit.commit.author?.date,
+            files_changed: commit.files?.map((file) => ({
+              filename: file.filename,
+              status: file.status,
+              additions: file.additions,
+              deletions: file.deletions,
+            })),
+          }));
+
+        return {
+          commits: slim,
+        };
+      }
+
+      case "fetch_branches": {
+        const { owner, repo } = params;
+        const branches = await octokit.rest.repos.listBranches({
+          owner,
+          repo,
+        });
+
+        return {
+          branches: branches.data,
         };
       }
 
