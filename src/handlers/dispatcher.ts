@@ -1,5 +1,4 @@
 import { Context, SupportedEvents, SymbioteRuntime } from "../types/index";
-import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { CallbackResult } from "../types/callbacks";
 import { isActionRuntimeCtx, isEdgeRuntimeCtx } from "../types/typeguards";
 import { compressString} from "@ubiquity-os/plugin-sdk/compression";
