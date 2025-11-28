@@ -7,8 +7,9 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - name: Setup Deno
-      uses: denoland/setup-deno@v2
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+
     - name: Run main script
       shell: bash
-      run: deno run --unstable-sloppy-imports --allow-all --unstable-kv dist/index.js
+      run: bun run dist/index.js

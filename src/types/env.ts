@@ -177,12 +177,20 @@ const sharedSchema = T.Object({
   APP_ID: T.String({ minLength: 1 }),
   APP_PRIVATE_KEY: T.String({ minLength: 1 }),
   KERNEL_PUBLIC_KEY: T.Optional(T.String()),
-  LOG_LEVEL: T.Optional(T.Enum(LOG_LEVEL, { default: LOG_LEVEL.INFO })),
-  NODE_ENV: T.Optional(T.Enum(NODE_ENV, { default: NODE_ENV.DEVELOPMENT })),
   AI_API_KEY: AI_API_KEY,
   OAUTH: OAUTH,
   WORKER: WORKER,
   SYMBIOTE_HOST: SYMBIOTE_HOST,
+  DENO_KV_UUID: T.String({
+    minLength: 1,
+    description: "The UUID of the DENO_KV_URL.",
+  }),
+  DENO_KV_ACCESS_TOKEN: T.String({
+    minLength: 1,
+    description: "The access token of the DENO_KV_URL.",
+  }),
+  LOG_LEVEL: T.Optional(T.Enum(LOG_LEVEL, { default: LOG_LEVEL.INFO })),
+  NODE_ENV: T.Optional(T.Enum(NODE_ENV, { default: NODE_ENV.DEVELOPMENT })),
   TELEGRAM: T.Optional(TELEGRAM),
 });
 
@@ -198,14 +206,6 @@ export const workflowEnvSchema = T.Composite([
     GITHUB_RUN_ID: T.String({
       minLength: 1,
       description: "The ID of the GitHub workflow run.",
-    }),
-    DENO_KV_UUID: T.String({
-      minLength: 1,
-      description: "The UUID of the DENO_KV_URL.",
-    }),
-    DENO_KV_ACCESS_TOKEN: T.String({
-      minLength: 1,
-      description: "The access token of the DENO_KV_URL.",
     }),
   }),
 ]);

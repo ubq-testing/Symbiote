@@ -1,13 +1,9 @@
 import { AtomicOperation, Kv} from "@deno/kv";
 import { WorkerEnv, WorkflowEnv } from "../types/index";
 
-function isLocalOrWorkflowEnv(env: WorkflowEnv | WorkerEnv): env is WorkflowEnv & { NODE_ENV: "local" } {
-  return "GITHUB_RUN_ID" in env || env.NODE_ENV === "local";
-}
-
 export class KvAdapter {
-  private _kv: Deno.Kv;
-  constructor(kv: Deno.Kv) {
+  private _kv: Deno.Kv | Kv;
+  constructor(kv: Deno.Kv | Kv) {
     this._kv = kv;
   }
 
@@ -72,17 +68,6 @@ export async function createKvAdapter(env: WorkflowEnv | WorkerEnv): Promise<KvA
     return new KvAdapter(kv);
   }
 
-  /**
-   * TODO MOVE INTO ABOVE
-   * If we're not in Deno runtime (e.g., Node.js in local dev or GitHub Actions),
-   * and the environment is a local or workflow environment, we can use the DENO_KV_UUID
-   * to open the KV store remotely, this way all environments can use the same KV store.
-   */
-  // if (isLocalOrWorkflowEnv(env)) {
-    // const { openKv } = await import("@deno/kv");
-
-    // return new KvAdapter(await openKv(`https://api.deno.com/databases/204639ee-f6e8-4f73-91c7-f8ddb46b302f/connect`));
-  // }
-
-  throw new Error("KV store is not available");
+    const { openKv } = await import("@deno/kv");
+    return new KvAdapter(await openKv(`https://api.deno.com/databases/${env.DENO_KV_UUID}/connect`));
 }

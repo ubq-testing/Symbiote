@@ -25,15 +25,6 @@ export interface OAuthTokenRecord {
   updatedAt: string;
 }
 
-/**
- * Legacy unencrypted token record for migration purposes.
- * @deprecated Only used for detecting and migrating old tokens
- */
-interface LegacyOAuthTokenRecord {
-  token: string;
-  updatedAt: string;
-}
-
 interface OAuthCallbackParams {
   kv: KvAdapter;
   env: WorkerEnv;
@@ -93,25 +84,13 @@ export async function readUserToken(
   login: string,
   encryptionKey: string
 ): Promise<string | null> {
-  const entry = await kv.get<OAuthTokenRecord | LegacyOAuthTokenRecord>(buildTokenKey(login));
+  const entry = await kv.get<OAuthTokenRecord>(buildTokenKey(login));
 
   if (!entry.value) {
     return null;
   }
-
-  // Check if this is a legacy unencrypted token
-  if ("token" in entry.value && typeof entry.value.token === "string") {
-    const legacyRecord = entry.value as LegacyOAuthTokenRecord;
-    console.log(`[OAuth] Migrating legacy unencrypted token for ${login}`);
-
-    // Migrate to encrypted format
-    await saveUserToken(kv, login, legacyRecord.token, encryptionKey);
-
-    return legacyRecord.token;
-  }
-
-  // Decrypt the token
-  const record = entry.value as OAuthTokenRecord;
+  
+  const record = entry.value;
 
   if (!record.encryptedToken || !isEncryptedData(record.encryptedToken)) {
     console.error(`[OAuth] Invalid token record format for ${login}`);
