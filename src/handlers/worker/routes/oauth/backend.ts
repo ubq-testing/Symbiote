@@ -1,9 +1,10 @@
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { Logs } from "@ubiquity-os/ubiquity-os-logger";
 import { KvAdapter } from "../../../../adapters/kv";
-import { WorkerEnv } from "../../../../types/env";
+import { WorkerEnv, WorkflowEnv } from "../../../../types/env";
 import { createRepoOctokit } from "../../../octokit";
 import { buildStateKey, buildTokenKey } from "../../../../utils/kv";
+import { encrypt, decrypt, EncryptedData, isEncryptedData } from "../../../../utils/crypto";
 
 export interface OAuthPendingState {
   login: string;
@@ -13,7 +14,22 @@ export interface OAuthPendingState {
   createdAt: string;
 }
 
+/**
+ * Encrypted OAuth token record stored in KV.
+ * The token is encrypted using AES-256-GCM before storage.
+ */
 export interface OAuthTokenRecord {
+  /** Encrypted token data */
+  encryptedToken: EncryptedData;
+  /** ISO timestamp of when the token was stored/updated */
+  updatedAt: string;
+}
+
+/**
+ * Legacy unencrypted token record for migration purposes.
+ * @deprecated Only used for detecting and migrating old tokens
+ */
+interface LegacyOAuthTokenRecord {
   token: string;
   updatedAt: string;
 }
@@ -61,16 +77,78 @@ export function buildAuthorizationUrl(env: WorkerEnv, state: string) {
   return `https://github.com/login/oauth/authorize?${params.toString()}`;
 }
 
-export async function readUserToken(kv: KvAdapter, login: string): Promise<string | null> {
-  const entry = await kv.get<OAuthTokenRecord>(buildTokenKey(login));
-  return entry.value?.token ?? null;
+/**
+ * Reads and decrypts a user's OAuth token from KV storage.
+ *
+ * Handles both encrypted (current) and unencrypted (legacy) token formats.
+ * Legacy tokens are automatically migrated to encrypted format on read.
+ *
+ * @param kv - KV adapter for storage access
+ * @param login - GitHub username
+ * @param encryptionKey - Base64-encoded encryption key from env
+ * @returns Decrypted token or null if not found
+ */
+export async function readUserToken(
+  kv: KvAdapter,
+  login: string,
+  encryptionKey: string
+): Promise<string | null> {
+  const entry = await kv.get<OAuthTokenRecord | LegacyOAuthTokenRecord>(buildTokenKey(login));
+
+  if (!entry.value) {
+    return null;
+  }
+
+  // Check if this is a legacy unencrypted token
+  if ("token" in entry.value && typeof entry.value.token === "string") {
+    const legacyRecord = entry.value as LegacyOAuthTokenRecord;
+    console.log(`[OAuth] Migrating legacy unencrypted token for ${login}`);
+
+    // Migrate to encrypted format
+    await saveUserToken(kv, login, legacyRecord.token, encryptionKey);
+
+    return legacyRecord.token;
+  }
+
+  // Decrypt the token
+  const record = entry.value as OAuthTokenRecord;
+
+  if (!record.encryptedToken || !isEncryptedData(record.encryptedToken)) {
+    console.error(`[OAuth] Invalid token record format for ${login}`);
+    return null;
+  }
+
+  try {
+    return await decrypt(record.encryptedToken, encryptionKey);
+  } catch (error) {
+    console.error(`[OAuth] Failed to decrypt token for ${login}:`, error);
+    return null;
+  }
 }
 
-export async function saveUserToken(kv: KvAdapter, login: string, token: string): Promise<void> {
-  await kv.set(buildTokenKey(login), {
-    token,
+/**
+ * Encrypts and saves a user's OAuth token to KV storage.
+ *
+ * @param kv - KV adapter for storage access
+ * @param login - GitHub username
+ * @param token - Plaintext OAuth token to encrypt and store
+ * @param encryptionKey - Base64-encoded encryption key from env
+ */
+export async function saveUserToken(
+  kv: KvAdapter,
+  login: string,
+  token: string,
+  encryptionKey: string
+): Promise<void> {
+  const encryptedToken = await encrypt(token, encryptionKey);
+
+  const record: OAuthTokenRecord = {
+    encryptedToken,
     updatedAt: new Date().toISOString(),
-  });
+  };
+
+  await kv.set(buildTokenKey(login), record);
+  console.log(`[OAuth] Token encrypted and saved for ${login}`);
 }
 
 export async function storePendingState(
@@ -133,7 +211,7 @@ export async function finalizeOAuthCallback({
   }
 
   const token = await exchangeCodeForToken(env, code, state);
-  await saveUserToken(kv, pending.login, token);
+  await saveUserToken(kv, pending.login, token, env.OAUTH.TOKEN_ENCRYPTION_KEY);
 
 
   //  todo: think if we can handle this better without the duplicate command needed to start the server

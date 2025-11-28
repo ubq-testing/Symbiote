@@ -6,6 +6,7 @@ import { customEventSchemas } from "../../types/custom-event-schemas";
 import { isCommentEvent } from "../../types/typeguards";
 import { readUserToken, generateOAuthState, storePendingState, buildAuthorizationUrl, postAuthorizationComment } from "../worker/routes/oauth/backend";
 import { buildTokenKey } from "../../utils/kv";
+import { createAppOctokit, createRepoOctokit } from "../octokit";
 
 const MS_PER_HOUR = 60 * 60 * 1000;
 
@@ -30,12 +31,12 @@ export class SymbioteServer {
   private _workflowId: number | null = null;
 
   constructor(context: Context<"issue_comment.created" | "server.start" | "server.restart" | "server.stop", "worker">) {
+    this._context = context;
     if (isCommentEvent(context)) {
       this._sessionId = context.pluginInputs.stateId;
     } else if (isCustomEvent(context)) {
       this._sessionId = context.payload.client_payload.stateId;
     }
-    this._context = context;
     const maxRuntimeHours = context.config.maxRuntimeHours ?? 6;
     const safetyBufferHours = 1;
     this._maxRuntimeHours = maxRuntimeHours - safetyBufferHours;
@@ -75,6 +76,22 @@ export class SymbioteServer {
     await this.checkServerDetails();
     let needsRestart = false;
     let isRunning = false;
+
+    if (isCommentEvent(this._context)) {
+      this._context.appOctokit = await createRepoOctokit({
+        env: this._context.env,
+        owner: this._context.payload.repository?.owner?.login ?? "",
+        repo: this._context.payload.repository?.name ?? "",
+      });
+    } else if (isCustomEvent(this._context)) {
+      this._context.appOctokit = await createRepoOctokit({
+        env: this._context.env,
+        owner: this._context.env.SYMBIOTE_HOST.FORKED_REPO.owner,
+        repo: this._context.env.SYMBIOTE_HOST.FORKED_REPO.repo,
+      });
+    } else {
+      throw new Error("Invalid context type for Symbiote server");
+    }
 
     // if the server is running, check if it has been running for too long
     if (this._currentRunData && this._currentRunData.status === "in_progress") {
@@ -206,7 +223,8 @@ export class SymbioteServer {
     logger.info(`Handling server.start event in worker`, { sessionId, workflowId });
 
     const login = this._context.env.SYMBIOTE_HOST.USERNAME;
-    const cachedToken = await readUserToken(adapters.kv, login);
+    const encryptionKey = this._context.env.OAUTH.TOKEN_ENCRYPTION_KEY;
+    const cachedToken = await readUserToken(adapters.kv, login, encryptionKey);
 
     if (cachedToken) {
       let validToken = await this.validateOAuthToken(cachedToken);
@@ -214,11 +232,13 @@ export class SymbioteServer {
       if (!validToken) {
         logger.info("Cached OAuth token is invalid, requesting new authorization", { login });
         await this._context.adapters.kv.delete(buildTokenKey(login));
+        return await this.requestOAuthAuthorization(login);
       }
 
       logger.info("Using cached OAuth token for user", { login });
       this._context.pluginInputs.authToken = cachedToken;
-      this._context.appOctokit = new customOctokit({ auth: cachedToken });
+      // symbioteOctokit is for public-facing actions (comments, PRs, issues) using the OAuth token
+      this._context.symbioteOctokit = new customOctokit({ auth: cachedToken });
       return await this.spawnServer();
     } else {
       logger.info("No OAuth token found for user, requesting new authorization", { login });
@@ -274,11 +294,10 @@ export class SymbioteServer {
   }
 
   async validateOAuthToken(token: string): Promise<boolean> {
-    const { appOctokit } = this._context;
     try {
-      await appOctokit.rest.users.getAuthenticated({
-        auth: token,
-      });
+      // Create a temporary octokit with the token to validate it
+      const tempOctokit = new customOctokit({ auth: token });
+      await tempOctokit.rest.users.getAuthenticated();
       return true;
     } catch (error) {
       return false;

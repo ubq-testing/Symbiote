@@ -10,6 +10,13 @@ import { createAppOctokit, createUserOctokit } from "./handlers/octokit";
 
 async function runAction() {
     process.env = validateEnvironment(process.env as Record<string, string>, "action") as unknown as Record<string, string>;
+    const pluginInputs = (await import("@actions/github")).context.payload.inputs;
+    const authToken = pluginInputs?.authToken;
+    if (!authToken) {
+        console.error("Auth token not found", pluginInputs);
+        throw new Error("Auth token not found");
+    }
+
 
     try {
         await createActionsPlugin<
@@ -23,7 +30,8 @@ async function runAction() {
                 return runSymbiote<SupportedEvents, "action">({
                     ...context,
                     appOctokit: await createAppOctokit(context.env),
-                    hostOctokit: await createUserOctokit(context.env.SYMBIOTE_HOST_PAT),
+                    hostOctokit: await createUserOctokit(context.env.SYMBIOTE_HOST.HOST_PAT),
+                    symbioteOctokit: await createUserOctokit(authToken),
                     runtime: "action",
                     adapters,
                 })

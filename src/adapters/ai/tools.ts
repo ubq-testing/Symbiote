@@ -18,7 +18,7 @@ const TOOLS = {
 "fetch_pull_request_reviews": async ({owner, repo, pull_number}: {owner: string, repo: string, pull_number: number}) => {},
 "fetch_pull_request_timeline": async ({owner, repo, pull_number}: {owner: string, repo: string, pull_number: number}) => {},
 "fetch_repository_details": async ({owner, repo}: {owner: string, repo: string}) => {},
-"check_app_installation": async ({owner, repo}: {owner: string, repo: string}) => {},
+"_installation": async ({owner, repo}: {owner: string, repo: string}) => {},
 "create_pull_request": async ({owner, repo, title, head, base, body, draft = false}: {owner: string, repo: string, title: string, head: string, base?: string, body: string, draft?: boolean}) => {},
 "create_issue": async ({owner, repo, title, body, labels, assignees}: {owner: string, repo: string, title: string, body: string, labels: string[], assignees: string[]}) => {},
 "create_comment": async ({owner, repo, issue_number, body}: {owner: string, repo: string, issue_number: number, body: string}) => {},
@@ -158,21 +158,6 @@ export const GITHUB_READ_ONLY_TOOLS = [
       required: ["owner", "repo"],
     },
   },
-  {
-    type: "function" as const,
-    function: {
-      name: "check_app_installation" as const,
-      description: "Confirm if the Symbiote app is installed on the repository",
-      parameters: {
-        type: "object",
-        properties: {
-          owner: { type: "string", description: "Repository owner" },
-          repo: { type: "string", description: "Repository name" },
-        },
-        required: ["owner", "repo"],
-      },
-    },
-  },
 ];
 
 export const GITHUB_WRITE_ONLY_TOOLS = [
@@ -188,7 +173,7 @@ export const GITHUB_WRITE_ONLY_TOOLS = [
           repo: { type: "string", description: "Repository name" },
           title: { type: "string", description: "Pull request title" },
           head: { type: "string", description: "The name of the branch where your changes are implemented" },
-          base: { type: "string", description: "The name of the branch you want the changes pulled into", default: "main" },
+          base: { type: "string", description: "The name of the branch you want the changes pulled into" },
           body: { type: "string", description: "The contents of the pull request" },
           draft: { type: "boolean", description: "Whether to create the pull request as a draft", default: false },
         },
@@ -559,35 +544,6 @@ export async function executeGitHubTool(
               })) || [],
           },
         };
-      }
-
-      case "check_app_installation": {
-        try{
-          const repoOctokit = await createRepoOctokit({
-            env,
-            owner: params.owner,
-            repo: params.repo,
-          });
-
-
-          const installation = await repoOctokit.rest.apps.getRepoInstallation({
-            owner: params.owner,
-            repo: params.repo,
-          });
-
-          return {
-            installation: {
-              id: installation.data.id,
-              html_url: installation.data.html_url,
-              created_at: installation.data.created_at,
-            },
-          };
-        } catch (error) {
-          return {
-            error: `Installation not found: ${name}`,
-            status: 404,
-          };
-        }
       }
 
       // Action tools

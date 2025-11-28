@@ -47,6 +47,8 @@ export const OPERATIONAL_CONSTRAINTS = [
 
 export const HOST_REPO_REQUIREMENTS = [
   "Work only in repositories owned by the host or where the GitHub App is installed",
+  "Where it is not installed, you need to determine if the host has an existing fork to work in or if you need to create a new one.",
+  "If the host has enabled Telegram communication and you are unsure of which repo or branch to PR against, use the send_telegram_message tool to ask the host for clarification",
 ] as const;
 
 export const PR_SCOPE_REQUIREMENTS = [

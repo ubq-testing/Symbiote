@@ -1,39 +1,30 @@
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
+import type { Notification } from "../../../handlers/action/server/event-poller";
 
-export interface MentionAssessmentRequest {
-    hostUsername: string;
-    notificationReason: string;
-    notificationType: string;
-    repoFullName?: string | null;
-    subjectTitle?: string | null;
-    subjectUrl?: string | null;
-    latestCommentUrl?: string | null;
-    mentionAuthor?: string | null;
-    mentionText?: string | null;
-    unread: boolean;
-    createdAt?: string;
-    additionalContext?: string[];
-    octokit: InstanceType<typeof customOctokit>;
-  }
-  
-  export type MentionPriority = "low" | "medium" | "high";
-  
-  export interface MentionAssessmentResponse {
-    shouldAct: boolean;
-    priority: MentionPriority;
-    confidence: number;
+export interface NotificationAssessmentRequest {
+  hostUsername: string;
+  notification: Notification;
+  latestCommentBody?: string | null;
+  latestCommentAuthor?: string | null;
+  octokit: InstanceType<typeof customOctokit>;
+}
+
+export type AssessmentPriority = "low" | "medium" | "high";
+
+export interface NotificationAssessmentResponse {
+  shouldAct: boolean;
+  priority: AssessmentPriority;
+  confidence: number;
+  reason: string;
+  suggestedActions: string[];
+  classification: "respond" | "investigate" | "ignore";
+}
+
+export interface SuggestedActionsResponse {
+  finalResponse: string;
+  results: {
+    action: string;
+    result: "success" | "failure";
     reason: string;
-    suggestedActions: string[];
-    classification: "respond" | "investigate" | "ignore";
-  }
-  
-  
-  export interface SuggestedActionsResponse {
-    finalResponse: string;
-    results: {
-      action: string;
-      result: "success" | "failure";
-      reason: string;
-    }[];
-  }
-  
+  }[];
+}

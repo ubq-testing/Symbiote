@@ -52,6 +52,14 @@
         "maximum": 360,
         "type": "number"
       },
+      "orgsToWorkIn": {
+        "type": "array",
+        "items": {
+          "examples": ["ubiquity-os", "ubq-testing"],
+          "description": "Those listed here instantly approve the bot to work within that organization without additional investigation.\n      Any not listed here that appear in the host's events/notifications will be investigated by the symbiont to determine \n      if it can work in that organization and repository with the permissions available to it.",
+          "type": "string"
+        }
+      },
       "aiConfig": {
         "default": {
           "kind": "OpenAi",
@@ -88,7 +96,8 @@
         },
         "required": ["kind"]
       }
-    }
+    },
+    "required": ["orgsToWorkIn"]
   },
   "homepage_url": "https://keyrxng-symbiote.deno.dev"
 }

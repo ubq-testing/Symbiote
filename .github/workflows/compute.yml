@@ -28,13 +28,15 @@ jobs:
     environment: ${{ github.ref == 'refs/heads/main' && 'main' || 'development' }}
     env:
       KERNEL_PUBLIC_KEY: ${{ secrets.KERNEL_PUBLIC_KEY }}
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       PLUGIN_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       LOG_LEVEL: ${{ secrets.LOG_LEVEL }}
       DENO_KV_UUID: ${{ secrets.DENO_KV_UUID }}
       DENO_KV_ACCESS_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
       AI_API_KEY: ${{ secrets.AI_API_KEY }}
       OAUTH: ${{ secrets.OAUTH }}
+      TELEGRAM: ${{ secrets.TELEGRAM }}
+      SYMBIOTE_HOST: ${{ secrets.SYMBIOTE_HOST }}
+      WORKER: ${{ secrets.WORKER }}
 
     steps:
       - uses: actions/checkout@v4
@@ -45,18 +47,16 @@ jobs:
       - name: Execute directive
         uses: ./
         env:
+          NODE_ENV: ${{ secrets.NODE_ENV }}
           GITHUB_RUN_ID: ${{ github.run_id }}
+          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
+          APP_ID: ${{ secrets.APP_ID }}
           KERNEL_PUBLIC_KEY: ${{ secrets.KERNEL_PUBLIC_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
           PLUGIN_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DENO_KV_UUID: ${{ secrets.DENO_KV_UUID }}
           DENO_KV_ACCESS_TOKEN: ${{ secrets.DENO_DEPLOY_TOKEN }}
-          APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
-          APP_ID: ${{ secrets.APP_ID }}
           SYMBIOTE_HOST: ${{ secrets.SYMBIOTE_HOST }}
-          SYMBIOTE_HOST_PAT: ${{ secrets.SYMBIOTE_HOST_PAT }}
-          WORKER_SECRET: ${{ secrets.WORKER_SECRET }}
-          WORKER_URL: ${{ secrets.WORKER_URL }}
-          NODE_ENV: ${{ secrets.NODE_ENV }}
-          AI_API_KEY: ${{ secrets.AI_API_KEY }}
+          WORKER: ${{ secrets.WORKER }}
           OAUTH: ${{ secrets.OAUTH }}
+          TELEGRAM: ${{ secrets.TELEGRAM }}
