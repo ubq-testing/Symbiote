@@ -18,6 +18,8 @@ const TOOLS = {
 "fetch_pull_request_reviews": async ({owner, repo, pull_number}: {owner: string, repo: string, pull_number: number}) => {},
 "fetch_pull_request_timeline": async ({owner, repo, pull_number}: {owner: string, repo: string, pull_number: number}) => {},
 "fetch_repository_details": async ({owner, repo}: {owner: string, repo: string}) => {},
+"fetch_user_repositories": async ({username, type, sort, per_page}: {username: string, type?: string, sort?: string, per_page?: number}) => {},
+"fetch_forks": async ({owner, repo, sort, per_page}: {owner: string, repo: string, sort?: string, per_page?: number}) => {},
 "_installation": async ({owner, repo}: {owner: string, repo: string}) => {},
 "create_pull_request": async ({owner, repo, title, head, base, body, draft = false}: {owner: string, repo: string, title: string, head: string, base?: string, body: string, draft?: boolean}) => {},
 "create_issue": async ({owner, repo, title, body, labels, assignees}: {owner: string, repo: string, title: string, body: string, labels: string[], assignees: string[]}) => {},
@@ -27,6 +29,7 @@ const TOOLS = {
 "update_issue": async ({owner, repo, issue_number, title, body, state, labels, assignees}: {owner: string, repo: string, issue_number: number, title: string, body: string, state?: "open" | "closed", labels?: string[], assignees?: string[]} ) => {},
 "update_comment": async ({owner, repo, comment_id, body}: {owner: string, repo: string, comment_id: number, body: string}) => {},
 "add_reaction":async ({owner, repo, subject_id, content}: {owner: string, repo: string, subject_id: number, content: string}) => {},
+"create_new_fork": async ({owner, repo, organization, name, default_branch_only}: {owner: string, repo: string, organization?: string, name?: string, default_branch_only?: boolean}) => {},
 }
 
 export const GITHUB_READ_ONLY_TOOLS = [
@@ -156,6 +159,40 @@ export const GITHUB_READ_ONLY_TOOLS = [
         },
       },
       required: ["owner", "repo"],
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "fetch_user_repositories" as const,
+      description: "Fetch repositories for a user",
+      parameters: {
+        type: "object",
+        properties: {
+          username: { type: "string", description: "GitHub username" },
+          type: { type: "string", enum: ["all", "owner", "member"], description: "Type of repositories to fetch", default: "owner" },
+          sort: { type: "string", enum: ["created", "updated", "pushed", "full_name"], description: "Sort order", default: "updated" },
+          per_page: { type: "number", description: "Number of repositories to fetch", default: 30 },
+        },
+        required: ["username"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "fetch_forks" as const,
+      description: "Fetch forks of a repository",
+      parameters: {
+        type: "object",
+        properties: {
+          owner: { type: "string", description: "Repository owner" },
+          repo: { type: "string", description: "Repository name" },
+          sort: { type: "string", enum: ["newest", "oldest", "stargazers", "watchers"], description: "Sort order", default: "newest" },
+          per_page: { type: "number", description: "Number of forks to fetch", default: 30 },
+        },
+        required: ["owner", "repo"],
+      },
     },
   },
 ];
@@ -327,6 +364,24 @@ export const GITHUB_WRITE_ONLY_TOOLS = [
       },
     },
   },
+  {
+    type: "function" as const,
+    function: {
+      name: "create_new_fork" as const,
+      description: "Create a fork of a repository",
+      parameters: {
+        type: "object",
+        properties: {
+          owner: { type: "string", description: "Repository owner" },
+          repo: { type: "string", description: "Repository name" },
+          organization: { type: "string", description: "Optional organization to fork to (defaults to authenticated user)" },
+          name: { type: "string", description: "Optional new name for the forked repository" },
+          default_branch_only: { type: "boolean", description: "Whether to fork only the default branch", default: false },
+        },
+        required: ["owner", "repo"],
+      },
+    },
+  },
 ];
 
 // GitHub Tool Definitions
@@ -443,6 +498,58 @@ export async function executeGitHubTool(
             created_at: repository.data.created_at,
             updated_at: repository.data.updated_at,
           },
+        };
+      }
+
+      case "fetch_user_repositories": {
+        const { username, type = "owner", sort = "updated", per_page = 30 } = params;
+        const repos = await octokit.rest.repos.listForUser({
+          username,
+          type,
+          sort,
+          per_page,
+        });
+
+        return {
+          repositories: repos.data.map((repo) => ({
+            name: repo.name,
+            full_name: repo.full_name,
+            description: repo.description,
+            html_url: repo.html_url,
+            language: repo.language,
+            stargazers_count: repo.stargazers_count,
+            forks_count: repo.forks_count,
+            fork: repo.fork,
+            private: repo.private,
+            created_at: repo.created_at,
+            updated_at: repo.updated_at,
+            pushed_at: repo.pushed_at,
+          })),
+        };
+      }
+
+      case "fetch_forks": {
+        const { owner, repo, sort = "newest", per_page = 30 } = params;
+        const forks = await octokit.rest.repos.listForks({
+          owner,
+          repo,
+          sort,
+          per_page,
+        });
+
+        return {
+          forks: forks.data.map((fork) => ({
+            owner: fork.owner.login,
+            name: fork.name,
+            full_name: fork.full_name,
+            description: fork.description,
+            html_url: fork.html_url,
+            created_at: fork.created_at,
+            updated_at: fork.updated_at,
+            pushed_at: fork.pushed_at,
+            stargazers_count: fork.stargazers_count,
+            forks_count: fork.forks_count,
+          })),
         };
       }
 
@@ -722,6 +829,41 @@ export async function executeGitHubTool(
             content,
             created_at: new Date().toISOString(),
           },
+        };
+      }
+
+      case "create_new_fork": {
+        const { owner, repo, organization, name, default_branch_only = false } = params;
+        // const fork = await octokit.rest.repos.createFork({
+        //   owner,
+        //   repo,
+        //   organization,
+        //   name,
+        //   default_branch_only,
+        // });
+
+        return {
+          fork: {
+            owner: "test",
+            name: "test",
+            full_name: "test/test",
+            html_url: "https://github.com/test/test",
+            clone_url: "https://github.com/test/test.git",
+            ssh_url: "git@github.com:test/test.git",
+            default_branch: "main",
+            created_at: new Date().toISOString(),
+          }
+
+          // fork: {
+          //   owner: fork.data.owner.login,
+          //   name: fork.data.name,
+          //   full_name: fork.data.full_name,
+          //   html_url: fork.data.html_url,
+          //   clone_url: fork.data.clone_url,
+          //   ssh_url: fork.data.ssh_url,
+          //   default_branch: fork.data.default_branch,
+          //   created_at: fork.data.created_at,
+          // },
         };
       }
 
