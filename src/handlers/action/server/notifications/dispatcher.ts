@@ -2,6 +2,7 @@ import { Context } from "../../../../types/index";
 import type { Notification } from "../../../../types/github";
 import { NotificationAssessmentRequest } from "../../../../adapters/ai/prompts/types";
 import { createRepoOctokit } from "../../../octokit";
+import { getWorkspaceRegistry, resolveNotificationSubject } from "../../../../adapters/ai/context-resolver";
 
 export async function dispatchNotification({
   context,
@@ -12,9 +13,10 @@ export async function dispatchNotification({
   notification: Notification;
   route: "kernel-forwarded" | "safe-action" | "unsafe-action";
 }): Promise<void> {
-  const { logger, adapters } = context;
+  const { logger, adapters, config } = context;
   const notificationId = notification.id ?? "unknown";
   const repoFullName = notification.repository?.full_name ?? null;
+  const hostUsername = context.env.SYMBIOTE_HOST.USERNAME;
 
   logger.info(`[NOTIFICATIONS] Processing notification ${notificationId}`, {
     route,
@@ -43,13 +45,39 @@ export async function dispatchNotification({
     octokit = context.hostOctokit;
   }
 
+  // Pre-fetch workspace registry and resolve subject context
+  const workspaceRegistry = await getWorkspaceRegistry({
+    octokit: context.hostOctokit,
+    hostUsername,
+    orgsToWorkIn: config.orgsToWorkIn ?? [],
+    kv: adapters.kv,
+  });
+
+  const resolvedSubject = await resolveNotificationSubject({
+    octokit,
+    notification,
+    hostUsername,
+    registry: workspaceRegistry,
+  });
+
+  logger.info(`[NOTIFICATIONS] Context resolved for ${notificationId}`, {
+    forkMapSize: Object.keys(workspaceRegistry.fork_map).length,
+    resolvedSubject: resolvedSubject ? {
+      type: resolvedSubject.type,
+      number: resolvedSubject.number,
+      host_fork_for_base: resolvedSubject.host_fork_for_base,
+    } : null,
+  });
+
   const request: NotificationAssessmentRequest = {
     kind: "notification",
-    hostUsername: context.env.SYMBIOTE_HOST.USERNAME,
+    hostUsername,
     notification,
     latestCommentBody: latestComment?.body ?? null,
     latestCommentAuthor: latestComment?.author ?? null,
     octokit,
+    workspaceRegistry,
+    resolvedSubject: resolvedSubject ?? undefined,
   };
 
   const { assessment, messages } = await adapters.ai.classify(request);

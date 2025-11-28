@@ -29,15 +29,20 @@ After gathering any needed context with tools, respond with a detailed JSON obje
 
 const FORK_WORKFLOW_GUIDELINES = (hostUsername: string) => `
 FORK / UPSTREAM WORKFLOW:
-- When acting on a pull request in an upstream (non-fork) repository, verify it is backed by a branch in the host's fork otherwise, create it (the fork and/or the branch).
-- Use read-only tools to locate the host-owned fork and the branch that backs the upstream PR, and plan any write actions to operate only inside the fork.
-- Your changes should flow by creating or updating symbiote pull requests from a symbiote branch in the fork into the host's fork branch; never plan to open or modify pull requests directly against the upstream repository.
+- ALWAYS check "resolvedSubject.host_fork_for_base" first - it tells you the host's fork for the current subject.
+- Use the "lookup_host_fork" tool to find the host's fork of any upstream repository (fast cached lookup).
+- Use "list_host_workspaces" to see which organizations the host works in.
+- Your changes should flow by creating symbiote branches in the host's fork, never directly in upstream repositories.
+
+FINDING HOST'S FORKS:
+1. Check resolvedSubject.host_fork_for_base if available (already resolved for you)
+2. Call lookup_host_fork("upstream/repo") to find fork for any other repo (uses pre-built cache)
+3. If no fork exists, use create_new_fork to create one before proceeding
 
 EXAMPLES OF WHEN TO ACT:
-- Review requested with changes → use read tools to detect whether the PR is in an upstream (non-fork) repo, then create_pull_request from a symbiote branch in ${hostUsername}'s fork into the branch that backs that PR (never directly against the upstream).
-- Someone has suggested they take a look at a new issue → fetch_issue_details, fetch_recent_comments, and create_pull_request from a symbiote branch in ${hostUsername}'s fork into their active fork branch (not the upstream).
-- They've pushed a new commit to their active branch → fetch_recent_commits and create_review against the commit only if necessary.
-- They've created a new issue → fetch_issue_details, fetch_recent_comments, and create_pull_request from a symbiote branch in ${hostUsername}'s fork into their active fork branch.
+- Review requested with changes → Check resolvedSubject.host_fork_for_base for the fork, then create_pull_request from a symbiote branch in ${hostUsername}'s fork.
+- Host created a new issue → Call lookup_host_fork for the repo, then create_pull_request from a symbiote branch in the fork.
+- Need to work in unfamiliar repo → Call lookup_host_fork first to find or confirm the fork location.
 `.trim();
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -47,7 +52,7 @@ EXAMPLES OF WHEN TO ACT:
 const NOTIFICATION_INPUT_FORMAT = `
 # Input Format
 
-You will receive a JSON object with the full GitHub notification and optional latest comment details:
+You will receive a JSON object with the GitHub notification and pre-resolved subject context:
 {
   "kind": "notification",
   "hostUsername": "the user you are acting on behalf of",
@@ -59,8 +64,27 @@ You will receive a JSON object with the full GitHub notification and optional la
     "repository": { "full_name": "owner/repo", "private": boolean, "fork": boolean, ... },
     "subject": { "type": "PullRequest | Issue | Commit | ...", "title": "...", "url": "API URL", ... }
   },
-  "latestComment": { "body": "comment text", "author": "username" } | null
-}`.trim();
+  "latestComment": { "body": "comment text", "author": "username" } | null,
+  
+  // PRE-RESOLVED SUBJECT CONTEXT (when available)
+  "resolvedSubject": {
+    "type": "PullRequest" | "Issue",
+    "number": 123,
+    "title": "...",
+    "state": "open" | "closed" | "merged",
+    "head_fork": "owner/fork-repo",      // For PRs: the fork the PR is from
+    "head_branch": "feature-branch",      // For PRs: the source branch
+    "base_repo": "upstream/original",     // The target repository
+    "base_branch": "main",                // The target branch
+    "is_host_pr": boolean,                // Did the host open this?
+    "host_fork_for_base": "host/fork"     // Host's fork of the base repo (if exists)
+  } | null
+}
+
+WORKSPACE LOOKUP TOOLS:
+- lookup_host_fork(upstream_repo) → Find host's fork of any repo (fast cached lookup)
+- list_host_workspaces() → List organizations and accounts the host works in
+- check_repo_in_workspace(repo_full_name) → Check if a repo is in the host's workspace`.trim();
 
 const NOTIFICATION_PRIORITY_GUIDELINES = `
 # When to Act (Notifications)
@@ -109,7 +133,7 @@ ${CLASSIFICATION_OUTPUT_FORMAT}`.trim();
 const EVENT_INPUT_FORMAT = `
 # Input Format
 
-You will receive a JSON object with the full GitHub event:
+You will receive a JSON object with the GitHub event and pre-resolved subject context:
 {
   "kind": "event",
   "hostUsername": "the user you are acting on behalf of",
@@ -120,8 +144,27 @@ You will receive a JSON object with the full GitHub event:
     "actor": { "login": "username", ... },
     "repo": { "name": "owner/repo", ... },
     "payload": { ... } // event-specific payload data
-  }
-}`.trim();
+  },
+  
+  // PRE-RESOLVED SUBJECT CONTEXT (when available)
+  "resolvedSubject": {
+    "type": "PullRequest" | "Issue",
+    "number": 123,
+    "title": "...",
+    "state": "open" | "closed" | "merged",
+    "head_fork": "owner/fork-repo",      // For PRs: the fork the PR is from
+    "head_branch": "feature-branch",      // For PRs: the source branch
+    "base_repo": "upstream/original",     // The target repository
+    "base_branch": "main",                // The target branch
+    "is_host_pr": boolean,                // Did the host open this?
+    "host_fork_for_base": "host/fork"     // Host's fork of the base repo (if exists)
+  } | null
+}
+
+WORKSPACE LOOKUP TOOLS:
+- lookup_host_fork(upstream_repo) → Find host's fork of any repo (fast cached lookup)
+- list_host_workspaces() → List organizations and accounts the host works in
+- check_repo_in_workspace(repo_full_name) → Check if a repo is in the host's workspace`.trim();
 
 const EVENT_TYPE_GUIDELINES = `
 # Event Types and Handling

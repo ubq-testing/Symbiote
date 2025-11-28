@@ -2,6 +2,7 @@ import { Context } from "../../../../types/index";
 import type { UserEvent } from "../../../../types/github";
 import { EventAssessmentRequest } from "../../../../adapters/ai/prompts/types";
 import { createRepoOctokit } from "../../../octokit";
+import { getWorkspaceRegistry, resolveEventSubject } from "../../../../adapters/ai/context-resolver";
 
 /**
  * Dispatches an event through the AI pipeline for classification and potential action
@@ -15,7 +16,7 @@ export async function dispatchEvent({
   event: UserEvent;
   route: "kernel-forwarded" | "safe-action" | "unsafe-action";
 }): Promise<void> {
-  const { logger, adapters, env } = context;
+  const { logger, adapters, env, config } = context;
   const eventId = event.id ?? "unknown";
   const repoFullName = event.repo?.name ?? null;
   const actorLogin = event.actor?.login ?? null;
@@ -50,11 +51,37 @@ export async function dispatchEvent({
     octokit = context.hostOctokit;
   }
 
+  // Pre-fetch workspace registry and resolve subject context
+  const workspaceRegistry = await getWorkspaceRegistry({
+    octokit: context.hostOctokit,
+    hostUsername,
+    orgsToWorkIn: config.orgsToWorkIn ?? [],
+    kv: adapters.kv,
+  });
+
+  const resolvedSubject = await resolveEventSubject({
+    octokit,
+    event,
+    hostUsername,
+    registry: workspaceRegistry,
+  });
+
+  logger.info(`[EVENTS] Context resolved for ${eventId}`, {
+    forkMapSize: Object.keys(workspaceRegistry.fork_map).length,
+    resolvedSubject: resolvedSubject ? {
+      type: resolvedSubject.type,
+      number: resolvedSubject.number,
+      host_fork_for_base: resolvedSubject.host_fork_for_base,
+    } : null,
+  });
+
   const request: EventAssessmentRequest = {
     kind: "event",
     hostUsername,
     event,
     octokit,
+    workspaceRegistry,
+    resolvedSubject: resolvedSubject ?? undefined,
   };
 
   const { assessment, messages } = await adapters.ai.classify(request);

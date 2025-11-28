@@ -13,7 +13,7 @@ export interface Adapters {
 export async function createAdapters(env: WorkflowEnv | WorkerEnv, config: PluginSettings): Promise<Adapters> {
   const kv = await createKvAdapter(env);
   const telegram = await createTelegramAdapter(env, kv);
-  const ai = await createAiAdapter(env, config, telegram);
+  const ai = await createAiAdapter(env, config, kv, telegram);
 
   return {
     kv,

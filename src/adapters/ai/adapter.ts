@@ -3,7 +3,15 @@ import type { ChatCompletionMessageParam, ChatCompletionTool } from "openai/reso
 import { WorkerEnv, WorkflowEnv } from "../../types/env";
 import { PluginSettings } from "../../types/plugin-input";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
-import { executeGitHubTool, GITHUB_READ_ONLY_TOOLS, GITHUB_TOOLS } from "./tools";
+import { 
+  executeGitHubTool, 
+  executeWorkspaceTool,
+  isWorkspaceTool,
+  ALL_READ_ONLY_TOOLS, 
+  GITHUB_TOOLS,
+  WORKSPACE_LOOKUP_TOOLS,
+  ALL_TOOLS,
+} from "./tools";
 import { TELEGRAM_TOOLS, executeTelegramTool, isTelegramTool } from "./telegram-tools";
 import { NOTIFICATION_CLASSIFICATION_SYSTEM_PROMPT, EVENT_CLASSIFICATION_SYSTEM_PROMPT } from "./prompts/notification-classification";
 import { SUGGESTED_ACTIONS_SYSTEM_PROMPT } from "./prompts/suggested-action-execution";
@@ -19,6 +27,7 @@ import {
   isEventRequest,
 } from "./prompts/types";
 import { TelegramAdapter } from "../telegram/adapter";
+import { KvAdapter } from "../kv";
 
 type SymbioteEnv = WorkerEnv | WorkflowEnv;
 
@@ -75,6 +84,7 @@ const DEFAULT_SUGGESTED_ACTIONS_RESPONSE: SuggestedActionsResponse = {
 export async function createAiAdapter(
   env: SymbioteEnv,
   config: PluginSettings,
+  kv: KvAdapter,
   telegram?: TelegramAdapter | null
 ): Promise<AiAdapter | null> {
   const aiConfig = config.aiConfig;
@@ -87,9 +97,13 @@ export async function createAiAdapter(
     baseURL: aiConfig.baseUrl,
   });
 
+  const hostUsername = env.SYMBIOTE_HOST.USERNAME;
+  const orgsToWorkIn = config.orgsToWorkIn ?? [];
+
   // Build available tools based on what adapters are available
-  const allTools: ChatCompletionTool[] = [
+  const allWriteTools: ChatCompletionTool[] = [
     ...GITHUB_TOOLS,
+    ...WORKSPACE_LOOKUP_TOOLS,
     ...(telegram ? TELEGRAM_TOOLS : []),
   ];
 
@@ -114,7 +128,7 @@ export async function createAiAdapter(
           model: aiConfig.model,
           temperature: 0.2,
           messages: currentMessages,
-          tools: GITHUB_READ_ONLY_TOOLS,
+          tools: ALL_READ_ONLY_TOOLS,
           tool_choice: toolCallCount === 0 ? "auto" : "none",
         });
 
@@ -137,6 +151,9 @@ export async function createAiAdapter(
           toolCallCount,
           defaultResponse: DEFAULT_ASSESSMENT,
           env,
+          kv,
+          hostUsername,
+          orgsToWorkIn,
         });
 
         toolCallCount = nextToolCallCount;
@@ -212,7 +229,7 @@ ${error instanceof Error ? error.message : String(error)}`.trim(),
           model: aiConfig.model,
           temperature: 0.2,
           messages: currentMessages,
-          tools: allTools,
+          tools: ALL_TOOLS,
           tool_choice: toolCallCount === maxToolCalls ? "none" : "auto",
         });
 
@@ -236,6 +253,9 @@ ${error instanceof Error ? error.message : String(error)}`.trim(),
           toolCallCount,
           defaultResponse: DEFAULT_SUGGESTED_ACTIONS_RESPONSE,
           env,
+          kv,
+          hostUsername,
+          orgsToWorkIn,
         });
 
         toolCallCount = nextToolCallCount;
@@ -315,7 +335,7 @@ function buildClassificationMessages(request: Omit<AssessmentRequest, "octokit">
 }
 
 function buildNotificationMessages(request: Omit<NotificationAssessmentRequest, "octokit">): ChatCompletionMessageParam[] {
-  const { hostUsername, notification, latestCommentBody, latestCommentAuthor } = request;
+  const { hostUsername, notification, latestCommentBody, latestCommentAuthor, resolvedSubject } = request;
 
   const payload = {
     kind: "notification",
@@ -349,6 +369,9 @@ function buildNotificationMessages(request: Omit<NotificationAssessmentRequest, 
           author: latestCommentAuthor,
         }
       : null,
+    // Pre-resolved context for the specific subject (PR/Issue)
+    // Use lookup_host_fork tool to find forks for other repos
+    resolvedSubject: resolvedSubject ?? null,
   };
 
   const systemPrompt = NOTIFICATION_CLASSIFICATION_SYSTEM_PROMPT(hostUsername);
@@ -366,7 +389,7 @@ function buildNotificationMessages(request: Omit<NotificationAssessmentRequest, 
 }
 
 function buildEventMessages(request: Omit<EventAssessmentRequest, "octokit">): ChatCompletionMessageParam[] {
-  const { hostUsername, event } = request;
+  const { hostUsername, event, resolvedSubject } = request;
 
   const stripUrlsFromObject = (obj: any) => {
     if (typeof obj === "object" && obj !== null) {
@@ -404,6 +427,9 @@ function buildEventMessages(request: Omit<EventAssessmentRequest, "octokit">): C
         : null,
       payload: stripUrlsFromObject(event.payload),
     },
+    // Pre-resolved context for the specific subject (PR/Issue)
+    // Use lookup_host_fork tool to find forks for other repos
+    resolvedSubject: resolvedSubject ?? null,
   };
 
   const systemPrompt = EVENT_CLASSIFICATION_SYSTEM_PROMPT(hostUsername);
@@ -458,6 +484,9 @@ async function handleAssistantMessage<T extends AssessmentResponse | SuggestedAc
   toolCallCount,
   defaultResponse,
   env,
+  kv,
+  hostUsername,
+  orgsToWorkIn,
 }: {
   message: OpenAI.Chat.Completions.ChatCompletionMessage;
   currentMessages: ChatCompletionMessageParam[];
@@ -466,6 +495,9 @@ async function handleAssistantMessage<T extends AssessmentResponse | SuggestedAc
   toolCallCount: number;
   defaultResponse: T;
   env: SymbioteEnv;
+  kv: KvAdapter;
+  hostUsername: string;
+  orgsToWorkIn: string[];
 }): Promise<{ toolCallCount: number; normalized?: T; done: boolean }> {
   let updatedCount = toolCallCount;
 
@@ -483,6 +515,8 @@ async function handleAssistantMessage<T extends AssessmentResponse | SuggestedAc
         // Route to appropriate tool executor
         if (isTelegramTool(toolCall.function.name) && telegram) {
           toolResult = await executeTelegramTool(telegram, toolCall);
+        } else if (isWorkspaceTool(toolCall.function.name)) {
+          toolResult = await executeWorkspaceTool(toolCall, kv, octokit, hostUsername, orgsToWorkIn);
         } else {
           toolResult = await executeGitHubTool(octokit, toolCall, env);
         }

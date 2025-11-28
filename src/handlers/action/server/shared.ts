@@ -2,6 +2,7 @@ import { Context } from "../../../types/index";
 import { createRuntimeTracker } from "../../../utils/runtime-tracker";
 import { pollUserEvents, processEvent, processNotification } from "./event-poller";
 import { processPendingTelegramMessages, notifyHostViaTelegram } from "./telegram-handler";
+import { syncWorkspaceRegistry } from "../../../adapters/ai/context-resolver";
 
 // Time conversion constants
 const MINUTES_TO_MS = 60 * 1000;
@@ -27,6 +28,25 @@ export async function runServerActionLoop({
 
   const username = env.SYMBIOTE_HOST.USERNAME;
   const telegramEnabled = !!adapters.telegram;
+
+  // Sync workspace registry at startup to cache fork mappings
+  try {
+    logger.info(`[CONTEXT] Syncing workspace registry at startup...`);
+    const registry = await syncWorkspaceRegistry({
+      octokit: context.hostOctokit,
+      hostUsername: username,
+      orgsToWorkIn: config.orgsToWorkIn ?? [],
+      kv: adapters.kv,
+    });
+    logger.info(`[CONTEXT] Workspace registry synced`, {
+      hostRepoCount: registry.host_repos.length,
+      orgCount: Object.keys(registry.org_repos).length,
+      forkMapSize: Object.keys(registry.fork_map).length,
+    });
+  } catch (error) {
+    logger.warn(`[CONTEXT] Failed to sync workspace registry at startup: ${error instanceof Error ? error.message : String(error)}`);
+    // Continue anyway - the dispatchers will attempt to sync on demand
+  }
 
   if (telegramEnabled) {
     logger.info(`[TELEGRAM] Telegram integration enabled, will monitor for host messages`);

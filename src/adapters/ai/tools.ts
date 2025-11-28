@@ -3,6 +3,8 @@ import { createRepoOctokit } from "../../handlers/octokit";
 import OpenAI from "openai";
 import { customOctokit } from "@ubiquity-os/plugin-sdk/octokit";
 import { WorkerEnv, WorkflowEnv } from "../../types/env";
+import { KvAdapter } from "../kv";
+import { findHostForkOf, getWorkspaceRegistry } from "./context-resolver";
 
 export type ToolName = {
   [K in keyof typeof TOOLS]: K
@@ -212,6 +214,58 @@ export const GITHUB_READ_ONLY_TOOLS = [
   },
 ];
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Workspace Lookup Tools - Query pre-built KV cache for fork/repo mappings
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const WORKSPACE_LOOKUP_TOOLS: ChatCompletionTool[] = [
+  {
+    type: "function" as const,
+    function: {
+      name: "lookup_host_fork" as const,
+      description: "Find the host's fork of a given upstream repository. Returns the fork's full_name if it exists, or null. This is a fast cached lookup - use this instead of fetch_forks when you need to find the host's specific fork.",
+      parameters: {
+        type: "object",
+        properties: {
+          upstream_repo: { 
+            type: "string", 
+            description: "Full name of the upstream repository (e.g., 'ubiquity/work.ubq.fi')" 
+          },
+        },
+        required: ["upstream_repo"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "list_host_workspaces" as const,
+      description: "List all workspaces (organizations) the host works in, plus their personal account. Use this to understand where the host can create forks or branches.",
+      parameters: {
+        type: "object",
+        properties: {},
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "check_repo_in_workspace" as const,
+      description: "Check if a repository exists in the host's workspace (their repos or orgs they work in). Returns details about the repo if found.",
+      parameters: {
+        type: "object",
+        properties: {
+          repo_full_name: { 
+            type: "string", 
+            description: "Full name of the repository to check (e.g., 'keyrxng/my-fork')" 
+          },
+        },
+        required: ["repo_full_name"],
+      },
+    },
+  },
+];
+
 export const GITHUB_WRITE_ONLY_TOOLS = [
   {
     type: "function" as const,
@@ -401,6 +455,12 @@ export const GITHUB_WRITE_ONLY_TOOLS = [
 
 // GitHub Tool Definitions
 export const GITHUB_TOOLS: ChatCompletionTool[] = [...GITHUB_READ_ONLY_TOOLS, ...GITHUB_WRITE_ONLY_TOOLS] as const;
+
+// All read-only tools (GitHub + Workspace lookups)
+export const ALL_READ_ONLY_TOOLS: ChatCompletionTool[] = [...GITHUB_READ_ONLY_TOOLS, ...WORKSPACE_LOOKUP_TOOLS] as const;
+
+// All tools including workspace lookups
+export const ALL_TOOLS: ChatCompletionTool[] = [...GITHUB_TOOLS, ...WORKSPACE_LOOKUP_TOOLS] as const;
 
 
 export async function executeGitHubTool(
@@ -920,6 +980,7 @@ export async function executeGitHubTool(
         throw new Error(`Unknown tool: ${name}`);
     }
   } catch (error) {
+    console.error(`[AI] Tool execution failed: ${name}`, { error: error instanceof Error ? error.message : String(error) });
     // Handle GitHub API errors gracefully
     if (error instanceof Error && "status" in error) {
       const status = (error as any).status;
@@ -934,7 +995,144 @@ export async function executeGitHubTool(
       }
     }
 
-    console.error(`[AI] Tool execution failed: ${name}`, { error: error instanceof Error ? error.message : String(error) });
     return { error: `Tool execution failed: ${error instanceof Error ? error.message : "Unknown error"}` };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Workspace Tool Execution - Queries pre-built KV cache
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type WorkspaceToolName = "lookup_host_fork" | "list_host_workspaces" | "check_repo_in_workspace";
+
+export function isWorkspaceTool(name: string): name is WorkspaceToolName {
+  return ["lookup_host_fork", "list_host_workspaces", "check_repo_in_workspace"].includes(name);
+}
+
+export async function executeWorkspaceTool(
+  toolCall: OpenAI.Chat.Completions.ChatCompletionMessageToolCall,
+  kv: KvAdapter,
+  octokit: InstanceType<typeof customOctokit>,
+  hostUsername: string,
+  orgsToWorkIn: string[],
+) {
+  const { name, arguments: args } = toolCall.function;
+
+  try {
+    const params = JSON.parse(args);
+
+    switch (name as WorkspaceToolName) {
+      case "lookup_host_fork": {
+        const { upstream_repo } = params;
+        
+        // First try direct KV lookup for speed
+        const fork = await findHostForkOf({
+          upstreamFullName: upstream_repo,
+          kv,
+        });
+
+        if (fork) {
+          return {
+            found: true,
+            upstream_repo,
+            host_fork: fork,
+            message: `Host has a fork: ${fork}`,
+          };
+        }
+
+        // If not in cache, check the full registry
+        const registry = await getWorkspaceRegistry({
+          octokit,
+          hostUsername,
+          orgsToWorkIn,
+          kv,
+        });
+
+        const forkFromRegistry = registry.fork_map[upstream_repo];
+        if (forkFromRegistry) {
+          return {
+            found: true,
+            upstream_repo,
+            host_fork: forkFromRegistry,
+            message: `Host has a fork: ${forkFromRegistry}`,
+          };
+        }
+
+        return {
+          found: false,
+          upstream_repo,
+          host_fork: null,
+          message: `No fork found for ${upstream_repo}. You may need to create one using create_new_fork.`,
+        };
+      }
+
+      case "list_host_workspaces": {
+        const registry = await getWorkspaceRegistry({
+          octokit,
+          hostUsername,
+          orgsToWorkIn,
+          kv,
+        });
+
+        return {
+          host_account: hostUsername,
+          organizations: Object.keys(registry.org_repos),
+          host_repo_count: registry.host_repos.length,
+          org_repo_counts: Object.fromEntries(
+            Object.entries(registry.org_repos).map(([org, repos]) => [org, repos.length])
+          ),
+          total_forks_mapped: Object.keys(registry.fork_map).length,
+          last_synced: registry.last_synced,
+        };
+      }
+
+      case "check_repo_in_workspace": {
+        const { repo_full_name } = params;
+        const registry = await getWorkspaceRegistry({
+          octokit,
+          hostUsername,
+          orgsToWorkIn,
+          kv,
+        });
+
+        // Check host's personal repos
+        const hostRepo = registry.host_repos.find(r => r.full_name === repo_full_name);
+        if (hostRepo) {
+          return {
+            found: true,
+            repo: hostRepo,
+            location: "host_account",
+            message: `Found in host's personal account`,
+          };
+        }
+
+        // Check org repos
+        for (const [org, repos] of Object.entries(registry.org_repos)) {
+          const orgRepo = repos.find(r => r.full_name === repo_full_name);
+          if (orgRepo) {
+            return {
+              found: true,
+              repo: orgRepo,
+              location: `organization:${org}`,
+              message: `Found in organization: ${org}`,
+            };
+          }
+        }
+
+        return {
+          found: false,
+          repo_full_name,
+          message: `Repository ${repo_full_name} not found in host's workspace`,
+        };
+      }
+
+      default:
+        throw new Error(`Unknown workspace tool: ${name}`);
+    }
+  } catch (error) {
+    console.error(`[AI] Workspace tool execution failed: ${name}`, { 
+      error: error instanceof Error ? error.message : String(error) 
+    });
+    return { error: `Workspace tool execution failed: ${error instanceof Error ? error.message : "Unknown error"}` };
   }
 }
