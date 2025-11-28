@@ -30,6 +30,13 @@ export const pluginSettingsSchema = T.Object(
       minimum: 1,
       maximum: 360,
     }),
+    // TODO: roll this out
+    orgsToWorkIn: T.Array(T.String({
+      examples: ["ubiquity-os", "ubq-testing"],
+      description: `Those listed here instantly approve the bot to work within that organization without additional investigation.
+      Any not listed here that appear in the host's events/notifications will be investigated by the symbiont to determine 
+      if it can work in that organization and repository with the permissions available to it.`.trim() 
+    })),
     aiConfig: T.Object(
       {
         kind: T.Union([
