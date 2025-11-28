@@ -1,4 +1,4 @@
-import { AtomicOperation, Kv} from "@deno/kv";
+import { AtomicOperation, Kv, openKv} from "@deno/kv";
 import { WorkerEnv, WorkflowEnv } from "../types/index";
 import { deserialize, serialize } from "node:v8";
 
@@ -65,7 +65,6 @@ export class KvAdapter {
 
 export async function createKvAdapter(env: WorkflowEnv | WorkerEnv): Promise<KvAdapter> {
   if(isLocalOrWorkflowEnv(env)) {
-    const { openKv } = await import("@deno/kv");
     return new KvAdapter(await openKv(`https://api.deno.com/databases/${env.DENO_KV_UUID}/connect`, {
       implementation: "remote",
       encodeV8: serialize,
