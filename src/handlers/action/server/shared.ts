@@ -142,7 +142,7 @@ export async function runServerActionLoop({
  */
 async function initiateRestart(context: Context<"server.start" | "server.restart", "action">, sessionId: string): Promise<void> {
   const { logger, env, config } = context;
-  const { WORKER_URL, WORKER_SECRET } = env;
+  const { WORKER: { URL, SECRET } } = env;
 
   const maxRetries = 3;
   const retryDelayMs = 10 * SECONDS_TO_MS;
@@ -151,7 +151,7 @@ async function initiateRestart(context: Context<"server.start" | "server.restart
   logger.info(`Initiating restart, sending callback to worker`, {
     sessionId,
     workflowRunId: context.env.GITHUB_RUN_ID,
-    workerUrl: WORKER_URL,
+    workerUrl: URL,
   });
 
   let retries = 0;
@@ -168,12 +168,12 @@ async function initiateRestart(context: Context<"server.start" | "server.restart
   while (retries < maxRetries && !confirmed) {
     try {
       const response = await Promise.race([
-        fetch(`${WORKER_URL}/callback`, {
+        fetch(`${URL}/callback`, {
           method: "POST",
           headers: {
             "X-GitHub-Event": "server.restart",
             "Content-Type": "application/json",
-            Authorization: `Bearer ${WORKER_SECRET}`,
+            Authorization: `Bearer ${SECRET}`,
           },
           body: JSON.stringify({
             action: "server.restart",

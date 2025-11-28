@@ -30,7 +30,7 @@ async function runAction() {
                 return runSymbiote<SupportedEvents, "action">({
                     ...context,
                     appOctokit: await createAppOctokit(context.env),
-                    hostOctokit: await createUserOctokit(context.env.SYMBIOTE_HOST_PAT),
+                    hostOctokit: await createUserOctokit(context.env.SYMBIOTE_HOST.HOST_PAT),
                     symbioteOctokit: await createUserOctokit(authToken),
                     runtime: "action",
                     adapters,

@@ -22,7 +22,7 @@ export async function createCallbackRoute({
   }){
     // Validate the worker secret
     const authHeader = ctx.req.header("Authorization");
-    const expectedSecret = validatedEnv.WORKER_SECRET;
+    const expectedSecret = validatedEnv.WORKER.SECRET;
     if (!authHeader || !authHeader.startsWith("Bearer ") || authHeader.slice(7) !== expectedSecret) {
       return ctx.json({ message: "Unauthorized" }, 401);
     }

@@ -3,21 +3,23 @@ import { Context, SupportedEvents } from "../../../types/index";
 
 export async function makeWorkerRequest(context: Context<SupportedEvents, "action">): Promise<CallbackResult> {
   const {
-    env: { WORKER_SECRET, WORKER_URL },
+    env: {
+      WORKER: { SECRET, URL },
+    },
     logger,
     eventName,
     payload,
   } = context;
 
-  logger.info(`Sending callback to: ${WORKER_URL}`);
+  logger.info(`Sending callback to: ${URL}`);
 
   try {
-    const response = await fetch(WORKER_URL, {
+    const response = await fetch(URL, {
       method: "POST",
       headers: {
         "X-GitHub-Event": eventName,
         "Content-Type": "application/json",
-        Authorization: `Bearer ${WORKER_SECRET}`,
+        Authorization: `Bearer ${SECRET}`,
       },
       body: JSON.stringify(payload),
     });
