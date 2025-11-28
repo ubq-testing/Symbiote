@@ -1,6 +1,7 @@
 import { Context } from "../../../types/index";
 import { createRuntimeTracker } from "../../../utils/runtime-tracker";
 import { pollUserEvents, processEvent, processNotification } from "./event-poller";
+import { processPendingTelegramMessages, notifyHostViaTelegram } from "./telegram-handler";
 
 // Time conversion constants
 const MINUTES_TO_MS = 60 * 1000;
@@ -18,13 +19,23 @@ export async function runServerActionLoop({
   runtimeTracker: ReturnType<typeof createRuntimeTracker>;
   sessionId: string;
 }): Promise<void> {
-  const { logger, env, config } = context;
+  const { logger, env, config, adapters } = context;
   let shouldStop = false;
   let stopSignalReceived = false;
 
   logger.info(`Server loop started`, { sessionId, workflowRunId: context.env.GITHUB_RUN_ID });
 
   const username = env.SYMBIOTE_HOST.USERNAME;
+  const telegramEnabled = !!adapters.telegram;
+
+  if (telegramEnabled) {
+    logger.info(`[TELEGRAM] Telegram integration enabled, will monitor for host messages`);
+    // Send startup notification to host
+    await notifyHostViaTelegram(
+      context,
+      `🤖 <b>Symbiote Online</b>\n\nI'm now monitoring your GitHub activity. Send me a message anytime you need assistance.`
+    );
+  }
 
   const runtimeCheckIntervalMs = (config.runtimeCheckIntervalMinutes ?? 60) * MINUTES_TO_MS;
   const pollIntervalMs = (config.pollIntervalSeconds ?? 60) * SECONDS_TO_MS;
@@ -52,6 +63,19 @@ export async function runServerActionLoop({
   // Main server loop - poll for events at configured interval
   while (!shouldStop && !stopSignalReceived) {
     try {
+      // Check for unsolicited Telegram messages (commands from host outside of AI conversations)
+      // Note: Awaited responses during AI tool calls are handled within the tool itself
+      if (telegramEnabled) {
+        const telegramMessages = await processPendingTelegramMessages(context);
+        if (telegramMessages.length > 0) {
+          logger.info(`[TELEGRAM] Processing ${telegramMessages.length} unsolicited message(s) from host`);
+          for (const msg of telegramMessages) {
+            logger.info(`[TELEGRAM] Host message: ${msg.text.slice(0, 200)}`);
+            // TODO: Route Telegram commands to appropriate handlers (e.g., "/status", "/stop")
+          }
+        }
+      }
+
       logger.info(`Polling for user events: ${username}`);
 
       const timeSince = lastPollTimestamp ? new Date(lastPollTimestamp) : new Date(Date.now() - 1000 * 60 * 60 * 24 * 3);
@@ -104,6 +128,12 @@ export async function runServerActionLoop({
   }
 
   clearInterval(runtimeCheckInterval);
+  
+  // Send shutdown notification
+  if (telegramEnabled) {
+    await notifyHostViaTelegram(context, `⏸️ <b>Symbiote Offline</b>\n\nShutting down. I'll be back soon.`);
+  }
+  
   logger.info(`Server loop ended`, { sessionId, workflowRunId: context.env.GITHUB_RUN_ID });
 }
 
