@@ -35,7 +35,8 @@ jobs:
           OAUTH: ${{ secrets.OAUTH }}
           WORKER: ${{ secrets.WORKER }}
           AI_API_KEY: ${{ secrets.AI_API_KEY }}
-          
+          DENO_KV_UUID: ${{ secrets.DENO_KV_UUID }}
+          DENO_KV_ACCESS_TOKEN: ${{ secrets.DENO_KV_ACCESS_TOKEN }}
 
         with:
           token: ${{ secrets.DENO_DEPLOY_TOKEN }}
