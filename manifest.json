@@ -99,5 +99,6 @@
     },
     "required": ["orgsToWorkIn"]
   },
-  "homepage_url": "https://keyrxng-symbiote.deno.dev"
+  "homepage_url": "https://keyrxng-symbiote.deno.dev",
+  "short_name": "ubq-testing/Symbiote@main"
 }
