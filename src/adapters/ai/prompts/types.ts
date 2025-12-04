@@ -44,6 +44,52 @@ export interface ResolvedSubject {
   // Host relationship
   is_host_pr: boolean;            // Did the host open this PR/Issue?
   host_fork_for_base?: string;    // Host's fork of base_repo (from registry)
+  // Related context (expanded)
+  linked_issues?: { number: number; title: string; state: string }[];
+  prior_reviews?: { author: string; state: string; submitted_at: string }[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Session Memory Types - Track symbiote actions and state across invocations
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Record of a symbiote-created PR for tracking
+ */
+export interface SymbiotePR {
+  fork: string;                   // "keyrxng/fork"
+  symbiote_branch: string;        // "symbiote/fix-123"
+  target_branch: string;          // "feature-x" or "main"
+  pr_number: number;
+  pr_url: string;
+  state: "open" | "closed" | "merged";
+  related_to?: {
+    type: "issue" | "pr";
+    repo: string;
+    number: number;
+  };
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Record of a recent action taken by the symbiote
+ */
+export interface RecentAction {
+  action: string;                 // "create_pull_request", "create_comment", etc.
+  target: string;                 // "owner/repo#123" or "owner/repo"
+  result: "success" | "failure";
+  summary: string;                // Brief description of what was done
+  timestamp: string;
+}
+
+/**
+ * Session memory stored in KV - tracks symbiote state across invocations
+ */
+export interface SessionMemory {
+  recent_actions: RecentAction[];  // Last N actions (rolling window)
+  symbiote_prs: SymbiotePR[];      // All tracked symbiote PRs
+  last_updated: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
