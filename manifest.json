@@ -62,8 +62,7 @@
       },
       "aiConfig": {
         "default": {
-          "kind": "OpenAi",
-          "model": "x-ai/grok-4.1-fast",
+          "kind": "OpenRouter",
           "baseUrl": "https://openrouter.ai/api/v1"
         },
         "type": "object",
@@ -83,10 +82,16 @@
             ]
           },
           "model": {
-            "description": "Chat/completions model identifier.",
-            "default": "x-ai/grok-4.1-fast",
-            "examples": ["gpt-4o-mini", "o1-mini", "openai/gpt-4o-mini"],
-            "type": "string"
+            "anyOf": [
+              {
+                "description": "Chat/completions model identifier.",
+                "examples": ["gpt-4o-mini", "o1-mini", "openai/gpt-4o-mini"],
+                "type": "string"
+              },
+              {
+                "type": "undefined"
+              }
+            ]
           },
           "baseUrl": {
             "description": "Base URL for the LLM endpoint.",
@@ -94,10 +99,11 @@
             "type": "string"
           }
         },
-        "required": ["kind"]
+        "required": ["kind", "model"]
       }
     },
     "required": ["orgsToWorkIn"]
   },
-  "homepage_url": "https://keyrxng-symbiote.deno.dev"
+  "homepage_url": "https://keyrxng-symbiote.deno.dev",
+  "short_name": "ubq-testing/Symbiote@bun-for-actions"
 }
