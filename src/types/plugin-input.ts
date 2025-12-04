@@ -53,14 +53,18 @@ export const pluginSettingsSchema = T.Object(
         baseUrl: T.String({
           description: "Base URL for the LLM endpoint.",
           default: "https://openrouter.ai/api/v1",
-
         }),
+        excludedModels: T.Array(T.String({
+          description: "List of model IDs to exclude from selection.",
+          default: [],
+        })),
       },
       {
         default: {
           kind: "OpenRouter",
           model: undefined,
           baseUrl: "https://openrouter.ai/api/v1",
+          excludedModels: [],
         },
       }
     ),

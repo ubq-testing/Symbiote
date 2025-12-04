@@ -48,6 +48,7 @@ export class AiAdapter implements Ai {
   private readonly allWriteTools: ChatCompletionTool[];
   private readonly modelRegistry: ModelRegistry;
   private readonly useFreeModels: boolean;
+  private readonly excludedModels: string[];
 
   constructor(
     env: SymbioteEnv,
@@ -58,7 +59,8 @@ export class AiAdapter implements Ai {
     const aiConfig = config.aiConfig!;
     
     // Determine if we should use free models (when baseUrl is OpenRouter and no specific model configured)
-    this.useFreeModels = aiConfig.baseUrl === OPENROUTER_BASE_URL && !aiConfig.model;
+    this.useFreeModels = aiConfig.baseUrl.includes("openrouter") && !aiConfig.model;
+    this.excludedModels = aiConfig.excludedModels ?? [];
     
     this.client = new OpenAI({
       apiKey: env.AI_API_KEY,
@@ -71,7 +73,7 @@ export class AiAdapter implements Ai {
     this.env = env;
     this.kv = kv;
     this.telegram = telegram;
-    this.modelRegistry = createModelRegistry(kv);
+    this.modelRegistry = createModelRegistry(kv, this.excludedModels);
 
     // Build available tools based on what adapters are available
     this.allWriteTools = [
@@ -271,10 +273,5 @@ export async function createAiAdapter(
   kv: KvAdapter,
   telegram?: TelegramAdapter | null
 ): Promise<AiAdapter | null> {
-  const aiConfig = config.aiConfig;
-  if (!aiConfig) {
-    return null;
-  }
-
   return new AiAdapter(env, config, kv, telegram ?? null);
 }

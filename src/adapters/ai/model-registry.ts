@@ -93,9 +93,29 @@ function isCacheValid(cache: ModelRegistryCache): boolean {
 export class ModelRegistry {
   private kv: KvAdapter;
   private cachedModels: CachedFreeModel[] | null = null;
+  private excludedModels: Set<string>;
 
-  constructor(kv: KvAdapter) {
+  constructor(kv: KvAdapter, excludedModels: string[] = []) {
     this.kv = kv;
+    this.excludedModels = new Set(excludedModels.map((m) => m.toLowerCase()));
+    
+    if (excludedModels.length > 0) {
+      console.log(`[ModelRegistry] Excluding models: ${excludedModels.join(", ")}`);
+    }
+  }
+
+  /**
+   * Checks if a model is excluded
+   */
+  private isExcluded(modelId: string): boolean {
+    const modelLower = modelId.toLowerCase();
+    // Check exact match and partial match (for model variants)
+    for (const excluded of this.excludedModels) {
+      if (modelLower === excluded || modelLower.startsWith(excluded)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**
@@ -103,11 +123,13 @@ export class ModelRegistry {
    */
   async getBestModel(): Promise<string> {
     const models = await this.getModels();
-    if (models.length === 0) {
-      console.warn("[ModelRegistry] No free models available, using fallback");
+    const available = models.filter((m) => !this.isExcluded(m.id));
+    
+    if (available.length === 0) {
+      console.warn("[ModelRegistry] No free models available (all excluded or none found), using fallback");
       return FALLBACK_MODEL;
     }
-    return models[0].id;
+    return available[0].id;
   }
 
   /**
@@ -120,7 +142,8 @@ export class ModelRegistry {
   }): Promise<string> {
     const models = await this.getModels();
     
-    let filtered = models;
+    // Always filter out excluded models first
+    let filtered = models.filter((m) => !this.isExcluded(m.id));
 
     if (options.requireTools) {
       filtered = filtered.filter((m) => m.supports_tools);
@@ -140,7 +163,8 @@ export class ModelRegistry {
 
     if (filtered.length === 0) {
       console.warn("[ModelRegistry] No models match criteria, using best available");
-      return models.length > 0 ? models[0].id : FALLBACK_MODEL;
+      const available = models.filter((m) => !this.isExcluded(m.id));
+      return available.length > 0 ? available[0].id : FALLBACK_MODEL;
     }
 
     return filtered[0].id;
@@ -255,7 +279,9 @@ export class ModelRegistry {
 
 /**
  * Factory function to create a ModelRegistry instance
+ * @param kv - KV adapter for caching
+ * @param excludedModels - List of model IDs to exclude from selection
  */
-export function createModelRegistry(kv: KvAdapter): ModelRegistry {
-  return new ModelRegistry(kv);
+export function createModelRegistry(kv: KvAdapter, excludedModels: string[] = []): ModelRegistry {
+  return new ModelRegistry(kv, excludedModels);
 }
