@@ -30,12 +30,11 @@ export const pluginSettingsSchema = T.Object(
       minimum: 1,
       maximum: 360,
     }),
-    // TODO: roll this out
     orgsToWorkIn: T.Array(T.String({
       examples: ["ubiquity-os", "ubq-testing"],
       description: `Those listed here instantly approve the bot to work within that organization without additional investigation.
       Any not listed here that appear in the host's events/notifications will be investigated by the symbiont to determine 
-      if it can work in that organization and repository with the permissions available to it.`.trim() 
+      if it can work in that organization and repository with the permissions available to it.`.trim()
     })),
     aiConfig: T.Object(
       {
@@ -43,11 +42,14 @@ export const pluginSettingsSchema = T.Object(
           T.Literal("OpenAi", { description: "Use OpenAI's public API." }),
           T.Literal("OpenRouter", { description: "Use OpenRouter as a proxy/provider." }),
         ]),
-        model: T.String({
-          description: "Chat/completions model identifier.",
-          default: "x-ai/grok-4.1-fast",
-          examples: ["gpt-4o-mini", "o1-mini", "openai/gpt-4o-mini"],
-        }),
+        model: T.Union([
+          T.String({
+            description: "Chat/completions model identifier.",
+            default: undefined,
+            examples: ["gpt-4o-mini", "o1-mini", "openai/gpt-4o-mini"],
+          }),
+          T.Undefined(),
+        ]),
         baseUrl: T.String({
           description: "Base URL for the LLM endpoint.",
           default: "https://openrouter.ai/api/v1",
@@ -56,8 +58,8 @@ export const pluginSettingsSchema = T.Object(
       },
       {
         default: {
-          kind: "OpenAi",
-          model: "x-ai/grok-4.1-fast",
+          kind: "OpenRouter",
+          model: undefined,
           baseUrl: "https://openrouter.ai/api/v1",
         },
       }
